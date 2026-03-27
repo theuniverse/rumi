@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate Rumi Icons</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #0c0c0c;
+            color: #f0f0f0;
+        }
+        canvas {
+            border: 1px solid #262626;
+            margin: 10px;
+            background: #0c0c0c;
+        }
+        .icon-set {
+            margin: 20px 0;
+        }
+        button {
+            background: #c8b89a;
+            color: #0c0c0c;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        button:hover {
+            background: #d4c4a6;
+        }
+    </style>
+</head>
+<body>
+    <h1>Rumi Icon Generator</h1>
+    <p>Right-click on each canvas and "Save image as..." to download the icons.</p>
+
+    <div class="icon-set">
+        <h2>Standard Icons</h2>
+        <canvas id="icon-192" width="192" height="192"></canvas>
+        <canvas id="icon-512" width="512" height="512"></canvas>
+    </div>
+
+    <div class="icon-set">
+        <h2>Maskable Icons (with safe zone)</h2>
+        <canvas id="icon-maskable-192" width="192" height="192"></canvas>
+        <canvas id="icon-maskable-512" width="512" height="512"></canvas>
+    </div>
+
+    <script>
+        function drawIcon(canvas, isMaskable = false) {
+            const ctx = canvas.getContext('2d');
+            const size = canvas.width;
+            const padding = isMaskable ? size * 0.2 : 0; // 20% padding for maskable
+            const iconSize = size - (padding * 2);
+
+            // Background (transparent for standard, dark for maskable)
+            if (isMaskable) {
+                ctx.fillStyle = '#0c0c0c';
+                ctx.fillRect(0, 0, size, size);
+            }
+
+            // Draw sand-colored rounded square
+            const cornerRadius = iconSize * 0.1;
+            ctx.fillStyle = '#c8b89a';
+            ctx.beginPath();
+            ctx.roundRect(padding, padding, iconSize, iconSize, cornerRadius);
+            ctx.fill();
+
+            // Add subtle gradient overlay
+            const gradient = ctx.createLinearGradient(padding, padding, padding + iconSize, padding + iconSize);
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 0.1)');
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0.1)');
+            ctx.fillStyle = gradient;
+            ctx.fill();
+        }
+
+        // Generate all icons
+        drawIcon(document.getElementById('icon-192'), false);
+        drawIcon(document.getElementById('icon-512'), false);
+        drawIcon(document.getElementById('icon-maskable-192'), true);
+        drawIcon(document.getElementById('icon-maskable-512'), true);
+
+        console.log('Icons generated! Right-click each canvas to save.');
+    </script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+.venv/
+**/__pycache__/
+*.pyc
+.env
+storage/live/*.wav
+storage/uploads/*
+.DS_Store

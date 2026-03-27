@@ -1,0 +1,74 @@
+version: "3.9"
+
+services:
+
+  # ── MySQL ──────────────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: rumi_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-rumi}
+      MYSQL_USER: ${MYSQL_USER:-rumi}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - rumi_mysql_data:/var/lib/mysql
+    networks:
+      - rumi_internal
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # 端口不对外暴露，backend 通过内网访问
+
+  # ── Backend (FastAPI) ──────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rumi_backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    volumes:
+      - rumi_storage:/app/storage
+    networks:
+      - rumi_internal
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    # 端口不对外暴露，只通过 nginx 内网访问
+
+  # ── Frontend (nginx + React SPA) ──────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rumi_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    networks:
+      - rumi_internal
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  rumi_storage:
+    driver: local
+  rumi_mysql_data:
+    driver: local
+
+networks:
+  rumi_internal:
+    driver: bridge

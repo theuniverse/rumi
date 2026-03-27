@@ -1,0 +1,25 @@
+# Python
+backend/.venv/
+backend/**/__pycache__/
+backend/**/*.pyc
+
+# Secrets
+backend/.env
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/dev-dist/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Storage (user-generated audio, never commit)
+backend/storage/live/*.wav
+backend/storage/uploads/*
+!backend/storage/live/.gitkeep
+!backend/storage/uploads/.gitkeep
+
+# Docker local overrides
+docker-compose.override.yml
