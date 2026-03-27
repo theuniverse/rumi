@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Amiri:wght@700&amp;display=swap');
+    </style>
+
+    <!-- Background: deep indigo radial -->
+    <radialGradient id="bg" cx="256" cy="220" r="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#2D1B69"/>
+      <stop offset="55%"  stop-color="#150A3A"/>
+      <stop offset="100%" stop-color="#060215"/>
+    </radialGradient>
+
+    <!-- Gold gradient for text -->
+    <linearGradient id="goldText" x1="256" y1="155" x2="256" y2="310" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#F7E98E"/>
+      <stop offset="35%"  stop-color="#E8C437"/>
+      <stop offset="100%" stop-color="#9A6818"/>
+    </linearGradient>
+
+    <!-- Gold fade for divider line -->
+    <linearGradient id="goldLine" x1="155" y1="325" x2="357" y2="325" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#C9A030" stop-opacity="0"/>
+      <stop offset="25%"  stop-color="#EDD060" stop-opacity="0.9"/>
+      <stop offset="50%"  stop-color="#F5E070"/>
+      <stop offset="75%"  stop-color="#EDD060" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#C9A030" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Center ambient glow -->
+    <radialGradient id="innerGlow" cx="256" cy="250" r="185" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#4A2D9F" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Gold glow for text -->
+    <filter id="fTextGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur"/>
+      <feColorMatrix in="blur" type="matrix"
+        values="0.9 0.7 0 0 0.05  0.6 0.4 0 0 0  0 0 0 0 0  0 0 0 0.6 0"
+        result="colorBlur"/>
+      <feMerge>
+        <feMergeNode in="colorBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Soft glow for ornaments -->
+    <filter id="fSoft" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- ── BACKGROUND ─────────────────────────────────────────────── -->
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <ellipse cx="256" cy="248" rx="205" ry="192" fill="url(#innerGlow)"/>
+
+  <!-- Distant star field -->
+  <g fill="#EDD060" opacity="0.18">
+    <circle cx="72"  cy="88"  r="1.5"/>
+    <circle cx="438" cy="72"  r="1"/>
+    <circle cx="465" cy="195" r="1.5"/>
+    <circle cx="48"  cy="338" r="1"/>
+    <circle cx="472" cy="425" r="1.5"/>
+    <circle cx="85"  cy="452" r="1"/>
+    <circle cx="378" cy="466" r="1.5"/>
+    <circle cx="28"  cy="178" r="1"/>
+    <circle cx="488" cy="302" r="1"/>
+    <circle cx="138" cy="36"  r="1.2"/>
+    <circle cx="320" cy="28"  r="1"/>
+    <circle cx="195" cy="480" r="1"/>
+    <circle cx="420" cy="478" r="1.2"/>
+    <circle cx="32"  cy="420" r="1"/>
+    <circle cx="490" cy="155" r="1.2"/>
+  </g>
+
+  <!-- ── 8-POINTED ISLAMIC STAR FRAME ───────────────────────────── -->
+  <!--  Outer R=190  Inner r=135  Center=(256,256)
+        Outer pts: top(256,66) → upper-R(390,122) → right(446,256)
+                   → lower-R(390,390) → bottom(256,446) → lower-L(122,390)
+                   → left(66,256) → upper-L(122,122)
+        Inner pts at midpoints at r=135                              -->
+  <path d="M256,66 L308,131 L390,122 L381,204
+           L446,256 L381,308 L390,390 L308,381
+           L256,446 L204,381 L122,390 L131,308
+           L66,256  L131,204 L122,122 L204,131 Z"
+        fill="none" stroke="#D4A843" stroke-width="1.5" opacity="0.60"
+        filter="url(#fSoft)"/>
+
+  <!-- Outer guide circle -->
+  <circle cx="256" cy="256" r="196"
+          fill="none" stroke="#C9A030" stroke-width="0.8" opacity="0.28"/>
+  <!-- Inner guide circle -->
+  <circle cx="256" cy="256" r="165"
+          fill="none" stroke="#C9A030" stroke-width="0.6" opacity="0.18"/>
+
+  <!-- Diamond ornaments at 4 cardinal star points -->
+  <g fill="#EDD060" filter="url(#fSoft)" opacity="0.80">
+    <!-- Top (256, 66) -->
+    <polygon points="256,57 262,66 256,75 250,66"/>
+    <!-- Bottom (256, 446) -->
+    <polygon points="256,437 262,446 256,455 250,446"/>
+    <!-- Left (66, 256) -->
+    <polygon points="57,256 66,262 75,256 66,250"/>
+    <!-- Right (446, 256) -->
+    <polygon points="437,256 446,262 455,256 446,250"/>
+  </g>
+
+  <!-- Dot ornaments at 4 diagonal star points -->
+  <g fill="#C9A030" opacity="0.60" filter="url(#fSoft)">
+    <circle cx="390" cy="122" r="3.5"/>
+    <circle cx="390" cy="390" r="3.5"/>
+    <circle cx="122" cy="122" r="3.5"/>
+    <circle cx="122" cy="390" r="3.5"/>
+  </g>
+
+  <!-- ── ORNAMENTAL ACCENTS ──────────────────────────────────────── -->
+  <!-- Triple-dot above text -->
+  <g fill="#D4A843" opacity="0.50">
+    <circle cx="256" cy="160" r="2.5"/>
+    <circle cx="233" cy="168" r="1.5"/>
+    <circle cx="279" cy="168" r="1.5"/>
+  </g>
+
+  <!-- ── MAIN PERSIAN TEXT: رومی ────────────────────────────────── -->
+  <text
+    x="256" y="296"
+    text-anchor="middle"
+    direction="rtl"
+    unicode-bidi="bidi-override"
+    font-family="'Amiri', 'Geeza Pro', 'Noto Naskh Arabic', 'Traditional Arabic', 'Arabic Typesetting', serif"
+    font-size="148"
+    font-weight="700"
+    fill="url(#goldText)"
+    filter="url(#fTextGlow)"
+  >رومی</text>
+
+  <!-- Divider line with fade-out gradient -->
+  <line x1="155" y1="325" x2="357" y2="325"
+        stroke="url(#goldLine)" stroke-width="0.9" opacity="0.70"/>
+
+  <!-- ── SOUND WAVE ACCENT ────────────────────────────────────────── -->
+  <g transform="translate(256,346)"
+     fill="none" stroke="#C9A030" stroke-width="1.8"
+     stroke-linecap="round" opacity="0.40">
+    <path d="M-52,0 C-46,-12 -40,12 -34,0
+             C-28,-12 -22,12  -16,0
+             C-10,-12  -4,12    2,0
+             C  8,-12  14,12   20,0
+             C 26,-12  32,12   38,0
+             C 44,-12  50,12   56,0"/>
+  </g>
+
+  <!-- Triple-dot below wave -->
+  <g fill="#D4A843" opacity="0.40">
+    <circle cx="256" cy="372" r="2"/>
+    <circle cx="235" cy="366" r="1.2"/>
+    <circle cx="277" cy="366" r="1.2"/>
+  </g>
+</svg>

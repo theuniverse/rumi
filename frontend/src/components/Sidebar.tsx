@@ -37,7 +37,7 @@ export default function Sidebar({ isOpen = true, onClose, isMobile = false }: Si
     >
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-5 py-5 border-b border-rim">
-        <div className="w-5 h-5 rounded bg-sand opacity-90" />
+        <img src="/icons/ney-simple.svg" alt="Rumi" className="w-6 h-6 rounded-sm" />
         <span className="text-soft font-semibold tracking-widest text-sm uppercase">
           Rumi
         </span>

@@ -15,5 +15,12 @@
       "cwd": "/Users/xiqish/Documents/GitHub/personal/rumi",
       "port": 5173
     }
+    ,{
+      "name": "rumi-static",
+      "runtimeExecutable": "/bin/zsh",
+      "runtimeArgs": ["-c", "python3 -m http.server 8888 --directory frontend/public"],
+      "cwd": "/Users/xiqish/Documents/GitHub/personal/rumi",
+      "port": 8888
+    }
   ]
 }

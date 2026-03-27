@@ -10,7 +10,7 @@ export default function MobileHeader({ isDrawerOpen, onToggleDrawer }: MobileHea
     <header className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-5 h-14 border-b border-rim bg-surface">
       {/* Logo */}
       <div className="flex items-center gap-2.5">
-        <div className="w-5 h-5 rounded bg-sand opacity-90" />
+        <img src="/icons/ney-simple.svg" alt="Rumi" className="w-6 h-6 rounded-sm" />
         <span className="text-soft font-semibold tracking-widest text-sm uppercase">
           Rumi
         </span>

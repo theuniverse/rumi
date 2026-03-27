@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rumi — Logo Preview</title>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0e0e10;
+      color: #888;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 32px 64px;
+      gap: 48px;
+    }
+
+    h1 {
+      font-size: 11px;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #555;
+    }
+
+    /* ── rows ──────────────────────────────────── */
+    .row {
+      display: flex;
+      align-items: flex-end;
+      gap: 36px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .label {
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #444;
+    }
+
+    /* ── clip shapes ──────────────────────────── */
+    .clip-sq   { display: block; }
+    .clip-ios  { border-radius: 22.5%; overflow: hidden; display: block; }
+    .clip-circ { border-radius: 50%;   overflow: hidden; display: block; }
+
+    /* ── size helpers ─────────────────────────── */
+    .sz-256 svg { width: 256px; height: 256px; display: block; }
+    .sz-128 svg { width: 128px; height: 128px; display: block; }
+    .sz-64  svg { width: 64px;  height: 64px;  display: block; }
+    .sz-32  svg { width: 32px;  height: 32px;  display: block; }
+
+    /* all svg text inherits loaded Amiri */
+    svg text { font-family: 'Amiri', 'Geeza Pro', serif !important; }
+
+    hr { width: 100%; border: none; border-top: 1px solid #1e1e22; }
+
+    .section-title {
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #333;
+      align-self: flex-start;
+    }
+  </style>
+</head>
+<body>
+  <h1>Rumi — Logo Draft</h1>
+
+  <!-- Shapes row -->
+  <div class="row" id="shapes-row"></div>
+
+  <hr>
+
+  <!-- Sizes row -->
+  <span class="section-title">Size test</span>
+  <div class="row" id="sizes-row"></div>
+
+  <script>
+    // ── SVG template ──────────────────────────────────────────────────────────
+    // IDs are replaced per-instance to avoid clashes when multiple SVGs
+    // are embedded in the same HTML document.
+    function makeSVG(instanceId) {
+      const uid = s => `${s}_${instanceId}`;
+      return `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="${uid('bg')}" cx="256" cy="220" r="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#2D1B69"/>
+      <stop offset="55%"  stop-color="#150A3A"/>
+      <stop offset="100%" stop-color="#060215"/>
+    </radialGradient>
+
+    <linearGradient id="${uid('goldText')}" x1="256" y1="155" x2="256" y2="310" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#F7E98E"/>
+      <stop offset="35%"  stop-color="#E8C437"/>
+      <stop offset="100%" stop-color="#9A6818"/>
+    </linearGradient>
+
+    <linearGradient id="${uid('goldLine')}" x1="155" y1="325" x2="357" y2="325" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#C9A030" stop-opacity="0"/>
+      <stop offset="25%"  stop-color="#EDD060" stop-opacity="0.9"/>
+      <stop offset="50%"  stop-color="#F5E070"/>
+      <stop offset="75%"  stop-color="#EDD060" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#C9A030" stop-opacity="0"/>
+    </linearGradient>
+
+    <radialGradient id="${uid('innerGlow')}" cx="256" cy="250" r="185" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#4A2D9F" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="${uid('fTextGlow')}" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur"/>
+      <feColorMatrix in="blur" type="matrix"
+        values="0.9 0.7 0 0 0.05  0.6 0.4 0 0 0  0 0 0 0 0  0 0 0 0.6 0"
+        result="colorBlur"/>
+      <feMerge>
+        <feMergeNode in="colorBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="${uid('fSoft')}" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" fill="url(#${uid('bg')})"/>
+  <ellipse cx="256" cy="248" rx="205" ry="192" fill="url(#${uid('innerGlow')})"/>
+
+  <!-- Star field -->
+  <g fill="#EDD060" opacity="0.18">
+    <circle cx="72"  cy="88"  r="1.5"/> <circle cx="438" cy="72"  r="1"/>
+    <circle cx="465" cy="195" r="1.5"/> <circle cx="48"  cy="338" r="1"/>
+    <circle cx="472" cy="425" r="1.5"/> <circle cx="85"  cy="452" r="1"/>
+    <circle cx="378" cy="466" r="1.5"/> <circle cx="28"  cy="178" r="1"/>
+    <circle cx="488" cy="302" r="1"/>   <circle cx="138" cy="36"  r="1.2"/>
+    <circle cx="320" cy="28"  r="1"/>   <circle cx="195" cy="480" r="1"/>
+    <circle cx="420" cy="478" r="1.2"/> <circle cx="32"  cy="420" r="1"/>
+    <circle cx="490" cy="155" r="1.2"/>
+  </g>
+
+  <!-- 8-pointed Islamic star frame (R=190, r=135) -->
+  <path d="M256,66 L308,131 L390,122 L381,204
+           L446,256 L381,308 L390,390 L308,381
+           L256,446 L204,381 L122,390 L131,308
+           L66,256  L131,204 L122,122 L204,131 Z"
+        fill="none" stroke="#D4A843" stroke-width="1.5" opacity="0.60"
+        filter="url(#${uid('fSoft')})"/>
+
+  <circle cx="256" cy="256" r="196" fill="none" stroke="#C9A030" stroke-width="0.8" opacity="0.28"/>
+  <circle cx="256" cy="256" r="165" fill="none" stroke="#C9A030" stroke-width="0.6" opacity="0.18"/>
+
+  <!-- Diamond ornaments at cardinal points -->
+  <g fill="#EDD060" filter="url(#${uid('fSoft')})" opacity="0.80">
+    <polygon points="256,57  262,66  256,75  250,66"/>
+    <polygon points="256,437 262,446 256,455 250,446"/>
+    <polygon points="57,256  66,262  75,256  66,250"/>
+    <polygon points="437,256 446,262 455,256 446,250"/>
+  </g>
+
+  <!-- Dot ornaments at diagonal points -->
+  <g fill="#C9A030" opacity="0.60" filter="url(#${uid('fSoft')})">
+    <circle cx="390" cy="122" r="3.5"/> <circle cx="390" cy="390" r="3.5"/>
+    <circle cx="122" cy="122" r="3.5"/> <circle cx="122" cy="390" r="3.5"/>
+  </g>
+
+  <!-- Triple-dot above text -->
+  <g fill="#D4A843" opacity="0.50">
+    <circle cx="256" cy="160" r="2.5"/>
+    <circle cx="233" cy="168" r="1.5"/>
+    <circle cx="279" cy="168" r="1.5"/>
+  </g>
+
+  <!-- Persian text: رومی -->
+  <text
+    x="256" y="296"
+    text-anchor="middle"
+    direction="rtl"
+    unicode-bidi="bidi-override"
+    font-family="'Amiri', 'Geeza Pro', 'Noto Naskh Arabic', 'Traditional Arabic', serif"
+    font-size="148"
+    font-weight="700"
+    fill="url(#${uid('goldText')})"
+    filter="url(#${uid('fTextGlow')})"
+  >رومی</text>
+
+  <!-- Divider -->
+  <line x1="155" y1="325" x2="357" y2="325"
+        stroke="url(#${uid('goldLine')})" stroke-width="0.9" opacity="0.70"/>
+
+  <!-- Sound wave -->
+  <g transform="translate(256,346)"
+     fill="none" stroke="#C9A030" stroke-width="1.8"
+     stroke-linecap="round" opacity="0.40">
+    <path d="M-52,0 C-46,-12 -40,12 -34,0 C-28,-12 -22,12 -16,0
+             C-10,-12  -4,12    2,0 C  8,-12  14,12  20,0
+             C 26,-12  32,12   38,0 C 44,-12  50,12  56,0"/>
+  </g>
+
+  <!-- Triple-dot below wave -->
+  <g fill="#D4A843" opacity="0.40">
+    <circle cx="256" cy="372" r="2"/>
+    <circle cx="235" cy="366" r="1.2"/>
+    <circle cx="277" cy="366" r="1.2"/>
+  </g>
+</svg>`;
+    }
+
+    // ── render helpers ────────────────────────────────────────────────────────
+    let counter = 0;
+
+    function item(clipClass, sizeClass, label) {
+      const div = document.createElement('div');
+      div.className = 'item';
+
+      const clip = document.createElement('div');
+      clip.className = `${clipClass} ${sizeClass}`;
+      clip.innerHTML = makeSVG(counter++);
+
+      const lbl = document.createElement('span');
+      lbl.className = 'label';
+      lbl.textContent = label;
+
+      div.appendChild(clip);
+      div.appendChild(lbl);
+      return div;
+    }
+
+    // ── shapes row ────────────────────────────────────────────────────────────
+    const shapesRow = document.getElementById('shapes-row');
+    shapesRow.appendChild(item('clip-sq',   'sz-256', 'Full square'));
+    shapesRow.appendChild(item('clip-ios',  'sz-256', 'iOS / Android (22.5%)'));
+    shapesRow.appendChild(item('clip-circ', 'sz-256', 'Circle'));
+
+    // ── sizes row ─────────────────────────────────────────────────────────────
+    const sizesRow = document.getElementById('sizes-row');
+    sizesRow.appendChild(item('clip-ios', 'sz-128', '128 px'));
+    sizesRow.appendChild(item('clip-ios', 'sz-64',  '64 px'));
+    sizesRow.appendChild(item('clip-ios', 'sz-32',  '32 px'));
+  </script>
+</body>
+</html>
