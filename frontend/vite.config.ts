@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
+  base: "/rumi/",
   plugins: [
     react(),
     VitePWA({
@@ -12,6 +13,8 @@ export default defineConfig({
         name: "Rumi - Music Session Analyzer",
         short_name: "Rumi",
         description: "Analyze music sessions, track BPM, and manage your DJ sets",
+        start_url: "/rumi/",
+        scope: "/rumi/",
         theme_color: "#0c0c0c",
         background_color: "#0c0c0c",
         display: "standalone",

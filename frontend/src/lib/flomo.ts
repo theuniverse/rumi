@@ -35,7 +35,7 @@ async function _postDirect(webhook: string, content: string): Promise<boolean> {
 
 async function _postViaProxy(webhook: string, content: string): Promise<boolean> {
   try {
-    const resp = await fetch("/api/flomo/proxy", {
+    const resp = await fetch(`${import.meta.env.BASE_URL}api/flomo/proxy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ webhook, content }),

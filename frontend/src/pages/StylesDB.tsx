@@ -303,7 +303,7 @@ export default function StylesDB() {
               Add one
             </button>{" "}
             or{" "}
-            <a href="/api/seed" className="text-sand underline-offset-2 hover:underline">
+            <a href={`${import.meta.env.BASE_URL}api/seed`} className="text-sand underline-offset-2 hover:underline">
               run the seed script
             </a>.
           </div>

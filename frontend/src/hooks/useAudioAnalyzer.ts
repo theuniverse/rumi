@@ -15,7 +15,7 @@ interface UseAudioAnalyzerOptions {
   onFrame?: (frame: AnalysisFrame) => void;
 }
 
-const WS_URL = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/analyze`;
+const WS_URL = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${import.meta.env.BASE_URL}ws/analyze`;
 
 export function useAudioAnalyzer({ recordingId, onFrame }: UseAudioAnalyzerOptions = {}) {
   const [status, setStatus] = useState<AnalyzerStatus>("idle");

@@ -271,7 +271,7 @@ export async function initDB(): Promise<void> {
   if (_initPromise) return _initPromise;
 
   _initPromise = (async () => {
-    const SQL = await initSqlJs({ locateFile: (f: string) => `/${f}` });
+    const SQL = await initSqlJs({ locateFile: (f: string) => `${import.meta.env.BASE_URL}${f}` });
     const saved = await idbGet(IDB_KEY);
 
     if (saved) {

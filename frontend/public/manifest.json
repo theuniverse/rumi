@@ -2,68 +2,69 @@
   "name": "Rumi - Music Session Analyzer",
   "short_name": "Rumi",
   "description": "Analyze music sessions, track BPM, and manage your DJ sets",
-  "start_url": "/",
+  "start_url": "/rumi/",
+  "scope": "/rumi/",
   "display": "standalone",
   "background_color": "#0c0c0c",
   "theme_color": "#0c0c0c",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/icons/ney-full.svg",
+      "src": "/rumi/icons/ney-full.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512x512.png",
+      "src": "/rumi/icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-384x384.png",
+      "src": "/rumi/icons/icon-384x384.png",
       "sizes": "384x384",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-192x192.png",
+      "src": "/rumi/icons/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-152x152.png",
+      "src": "/rumi/icons/icon-152x152.png",
       "sizes": "152x152",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-144x144.png",
+      "src": "/rumi/icons/icon-144x144.png",
       "sizes": "144x144",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-128x128.png",
+      "src": "/rumi/icons/icon-128x128.png",
       "sizes": "128x128",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-96x96.png",
+      "src": "/rumi/icons/icon-96x96.png",
       "sizes": "96x96",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-72x72.png",
+      "src": "/rumi/icons/icon-72x72.png",
       "sizes": "72x72",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-maskable-512x512.png",
+      "src": "/rumi/icons/icon-maskable-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -76,15 +77,15 @@
       "name": "Live Analyzer",
       "short_name": "Live",
       "description": "Start live audio analysis",
-      "url": "/live",
-      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+      "url": "/rumi/live",
+      "icons": [{ "src": "/rumi/icons/icon-192x192.png", "sizes": "192x192" }]
     },
     {
       "name": "Sessions",
       "short_name": "Sessions",
       "description": "View past sessions",
-      "url": "/sessions",
-      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+      "url": "/rumi/sessions",
+      "icons": [{ "src": "/rumi/icons/icon-192x192.png", "sizes": "192x192" }]
     }
   ]
 }

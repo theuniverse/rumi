@@ -294,7 +294,7 @@ function TutorialBlock({ audio, onSaved }: { audio: TutorialAudio; onSaved: () =
       const formData = new FormData();
       formData.append("file", blob, audio.name.toLowerCase() + ".wav");
 
-      const analyzeResponse = await fetch("/analyze/file", { method: "POST", body: formData });
+      const analyzeResponse = await fetch(`${import.meta.env.BASE_URL}analyze/file`, { method: "POST", body: formData });
       if (!analyzeResponse.ok) {
         const errorText = await analyzeResponse.text();
         throw new Error(`Analysis failed: ${errorText}`);

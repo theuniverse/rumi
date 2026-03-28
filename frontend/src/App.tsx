@@ -20,7 +20,7 @@ export default function App() {
 
   return (
     <AudioPlayerProvider>
-      <BrowserRouter>
+      <BrowserRouter basename="/rumi">
         <Routes>
           <Route element={<Layout />}>
             <Route index element={<Dashboard />} />
