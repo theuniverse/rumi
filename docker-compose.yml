@@ -32,6 +32,8 @@ services:
     restart: unless-stopped
     ports:
       - "8888:80"
+    volumes:
+      - rumi_storage:/app/storage:ro
     networks:
       - rumi_internal
     depends_on:
