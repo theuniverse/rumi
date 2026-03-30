@@ -26,6 +26,7 @@ export default function GlobalAudioPlayer() {
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
         boxShadow: "0 -4px 32px rgba(0,0,0,0.5)",
+        paddingBottom: "var(--safe-area-bottom)",
       }}
     >
       <div className="flex items-center gap-4 px-5 py-3 max-w-5xl mx-auto">

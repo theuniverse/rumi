@@ -110,6 +110,10 @@ export default function Layout() {
           flex-1 overflow-y-auto
           ${isMobile ? 'pt-14' : ''}
         `}
+        style={isMobile ? {
+          paddingTop: 'calc(3.5rem + var(--safe-area-top))',
+          paddingBottom: 'var(--safe-area-bottom)'
+        } : undefined}
       >
         <Outlet />
         {/* Spacer so content isn't hidden under the fixed audio player */}
