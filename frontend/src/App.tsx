@@ -18,6 +18,41 @@ export default function App() {
     checkPendingFollowUps();
   }, []);
 
+  // Disable browser swipe-back gesture for native app feel
+  useEffect(() => {
+    let startX = 0;
+    let startY = 0;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      const deltaX = e.touches[0].clientX - startX;
+      const deltaY = e.touches[0].clientY - startY;
+
+      // Prevent horizontal swipe gestures (back/forward navigation)
+      // Only prevent if horizontal movement is greater than vertical
+      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
+        // Allow swipe on scrollable elements
+        const target = e.target as HTMLElement;
+        const isScrollable = target.closest('[data-allow-swipe]');
+        if (!isScrollable) {
+          e.preventDefault();
+        }
+      }
+    };
+
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, []);
+
   return (
     <AudioPlayerProvider>
       <BrowserRouter basename="/rumi">

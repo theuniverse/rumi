@@ -5,9 +5,11 @@
   "start_url": "/rumi/",
   "scope": "/rumi/",
   "display": "standalone",
+  "display_override": ["standalone", "fullscreen"],
   "background_color": "#0c0c0c",
   "theme_color": "#0c0c0c",
   "orientation": "portrait-primary",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/rumi/icons/ney-full.svg",
