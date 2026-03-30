@@ -63,7 +63,8 @@ export function useAudioAnalyzer({ recordingId, onFrame }: UseAudioAnalyzerOptio
           return;
         }
         if (msg.type === "saved") {
-          setAudioUrl(msg.audio_url ?? null);
+          const raw: string | null = msg.audio_url ?? null;
+          setAudioUrl(raw ? import.meta.env.BASE_URL + raw.slice(1) : null);
           wsRef.current?.close();
           wsRef.current = null;
           return;

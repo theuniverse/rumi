@@ -119,7 +119,12 @@ export default function VideoAnalyzer() {
         if (!res.ok) throw new Error(await res.text());
         return res.json();
       })
-      .then((data) => { if (!cancelled) setUploadResult(data); })
+      .then((data: AnalysisResult) => {
+        if (!cancelled) setUploadResult({
+          ...data,
+          audio_url: data.audio_url ? import.meta.env.BASE_URL + data.audio_url.slice(1) : null,
+        });
+      })
       .catch((err) => { if (!cancelled) setUploadError(err instanceof Error ? err.message : "Analysis failed"); })
       .finally(() => { if (!cancelled) setIsUploading(false); });
 
@@ -526,8 +531,11 @@ function TutorialBlock({ audio, onSaved }: { audio: TutorialAudio; onSaved: () =
         throw new Error(`Analysis failed: ${errorText}`);
       }
 
-      const data = await analyzeResponse.json();
-      setResult(data);
+      const data: AnalysisResult = await analyzeResponse.json();
+      setResult({
+        ...data,
+        audio_url: data.audio_url ? import.meta.env.BASE_URL + data.audio_url.slice(1) : null,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed");
     } finally {
