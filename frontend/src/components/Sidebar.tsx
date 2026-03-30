@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
-import { Activity, Tag, LayoutDashboard, Calendar, MapPin, Settings } from "lucide-react";
+import { Activity, Tag, LayoutDashboard, Calendar, MapPin, Settings, RefreshCw } from "lucide-react";
 import clsx from "clsx";
+import { useVersionCheck } from "../hooks/useVersionCheck";
 
 const NAV = [
   { to: "/",          icon: LayoutDashboard, label: "Home"      },
@@ -18,6 +19,8 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isOpen = true, onClose, isMobile = false }: SidebarProps) {
+  const { hasUpdate, currentVersion, reload } = useVersionCheck();
+
   const handleNavClick = () => {
     if (isMobile && onClose) {
       onClose();
@@ -72,7 +75,17 @@ export default function Sidebar({ isOpen = true, onClose, isMobile = false }: Si
 
       {/* Footer */}
       <div className="px-5 py-4 border-t border-rim">
-        <p className="text-faint text-xs font-mono">v0.1</p>
+        {hasUpdate ? (
+          <button
+            onClick={reload}
+            className="flex items-center gap-2 w-full px-3 py-2 rounded text-xs bg-sand/10 text-sand hover:bg-sand/20 transition-colors touch-manipulation"
+          >
+            <RefreshCw size={12} />
+            <span>重新加载以使用最新版本</span>
+          </button>
+        ) : (
+          <p className="text-faint text-xs font-mono">v{currentVersion}</p>
+        )}
       </div>
     </aside>
   );

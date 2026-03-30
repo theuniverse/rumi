@@ -33,6 +33,17 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/api/version")
+def get_version():
+    """Return current deployment version"""
+    version_file = Path(__file__).parent / "version.txt"
+    try:
+        version = version_file.read_text().strip()
+        return {"version": version}
+    except FileNotFoundError:
+        return {"version": "unknown"}
+
+
 # ── Flomo proxy (CORS fallback) ───────────────────────────────────────────────
 
 class FlomoProxyBody(BaseModel):
