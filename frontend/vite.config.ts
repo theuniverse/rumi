@@ -112,6 +112,7 @@ export default defineConfig({
   ],
 
   server: {
+    host: true, // Listen on all network interfaces
     port: 5173,
     proxy: {
       // Dev-only: BASE_URL is /rumi/ so requests arrive with /rumi/ prefix

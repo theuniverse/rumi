@@ -8,8 +8,11 @@ interface MobileHeaderProps {
 export default function MobileHeader({ isDrawerOpen, onToggleDrawer }: MobileHeaderProps) {
   return (
     <header
-      className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-5 h-14 border-b border-rim bg-surface"
-      style={{ paddingTop: 'var(--safe-area-top)' }}
+      className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-5 border-b border-rim bg-surface"
+      style={{
+        minHeight: 'calc(3.5rem + var(--safe-area-top))',
+        paddingTop: 'var(--safe-area-top)'
+      }}
     >
       {/* Logo */}
       <div className="flex items-center gap-2.5">

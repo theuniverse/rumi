@@ -20,13 +20,13 @@ export default function GlobalAudioPlayer() {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-rim"
+      className="fixed left-0 right-0 z-50 border-t border-rim"
       style={{
+        bottom: 'var(--safe-area-bottom)',
         background: "rgba(10, 10, 10, 0.97)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
         boxShadow: "0 -4px 32px rgba(0,0,0,0.5)",
-        paddingBottom: "var(--safe-area-bottom)",
       }}
     >
       <div className="flex items-center gap-4 px-5 py-3 max-w-5xl mx-auto">

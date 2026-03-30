@@ -34,6 +34,10 @@ export default function Sidebar({ isOpen = true, onClose, isMobile = false }: Si
         ],
         !isMobile && "lg:flex"
       )}
+      style={isMobile ? {
+        paddingTop: 'var(--safe-area-top)',
+        paddingBottom: 'var(--safe-area-bottom)'
+      } : undefined}
     >
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-5 py-5 border-b border-rim">

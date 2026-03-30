@@ -53,20 +53,27 @@ def _extract_audio_if_video(content: bytes, original_name: str) -> tuple[bytes, 
                 ["ffmpeg", "-y", "-i", tmp_in.name, "-vn", "-ac", "1", "-ar", "44100", tmp_out_path],
                 capture_output=True,
                 check=True,
-                timeout=120,
+                timeout=300,  # Increased timeout for large video files
             )
             with open(tmp_out_path, "rb") as f:
-                return f.read(), Path(original_name).stem + ".wav", None
+                wav_content = f.read()
+            # Clean up immediately: delete video temp file and wav temp file
+            os.unlink(tmp_in.name)
+            os.unlink(tmp_out_path)
+            return wav_content, Path(original_name).stem + ".wav", None
         except FileNotFoundError:
             # ffmpeg not installed — return the temp file path so librosa can
             # open it directly (required for AVFoundation on macOS)
             logger.warning("ffmpeg not found, will pass file path to librosa for %s", original_name)
             return content, original_name, tmp_in.name  # caller cleans up
-        finally:
+        except Exception as e:
+            # Clean up on error
             if os.path.exists(tmp_out_path):
                 os.unlink(tmp_out_path)
+            raise
     except Exception:
-        os.unlink(tmp_in.name)
+        if os.path.exists(tmp_in.name):
+            os.unlink(tmp_in.name)
         raise
 
 
