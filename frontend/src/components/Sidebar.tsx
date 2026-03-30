@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { Activity, Tag, LayoutDashboard, Calendar, MapPin, Settings, RefreshCw } from "lucide-react";
+import { Activity, Tag, LayoutDashboard, Calendar, MapPin, Users, Settings, RefreshCw } from "lucide-react";
 import clsx from "clsx";
 import { useVersionCheck } from "../hooks/useVersionCheck";
 
@@ -8,6 +8,7 @@ const NAV = [
   { to: "/analyze",   icon: Activity,        label: "Analyze"   },
   { to: "/sessions",  icon: Calendar,        label: "Sessions"  },
   { to: "/places",    icon: MapPin,          label: "Places"    },
+  { to: "/people",    icon: Users,           label: "People"    },
   { to: "/styles",    icon: Tag,             label: "Styles"    },
   { to: "/settings",  icon: Settings,        label: "Settings"  },
 ];

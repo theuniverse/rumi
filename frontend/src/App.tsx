@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Analyze from "./pages/Analyze";
 import Sessions from "./pages/Sessions";
 import Places from "./pages/Places";
+import People from "./pages/People";
 import StylesDB from "./pages/StylesDB";
 import Settings from "./pages/Settings";
 import { AudioPlayerProvider } from "./contexts/AudioPlayerContext";
@@ -62,6 +63,7 @@ export default function App() {
             <Route path="analyze" element={<Analyze />} />
             <Route path="sessions" element={<Sessions />} />
             <Route path="places" element={<Places />} />
+            <Route path="people" element={<People />} />
             <Route path="styles" element={<StylesDB />} />
             <Route path="settings" element={<Settings />} />
           </Route>

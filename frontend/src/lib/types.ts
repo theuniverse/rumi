@@ -35,6 +35,21 @@ export interface Place {
 /** @deprecated Use Place instead */
 export type Venue = Place;
 
+export type PersonType = 'dj' | 'musician' | 'promoter' | 'raver' | 'other';
+
+export interface Person {
+  id: number;
+  name: string;
+  type: PersonType;
+  city: string | null;
+  instagram: string | null;   // handle only, e.g. "djname" (no @)
+  ra_url: string | null;      // full Resident Advisor profile URL
+  bio: string | null;
+  created_at: string;
+  /** Populated when fetched via getPeople() */
+  tags?: Tag[];
+}
+
 export interface Session {
   id: number;
   venue_id: number | null;
@@ -77,21 +92,24 @@ export interface AnalysisSnapshot {
 export interface AllData {
   tags: Tag[];
   venues: Venue[];
+  people: Person[];
   sessions: Session[];
   recordings: Recording[];
   snapshots: AnalysisSnapshot[];
 }
 
-export type ExportableType = 'tags' | 'venues' | 'sessions' | 'recordings' | 'snapshots';
+export type ExportableType = 'tags' | 'venues' | 'people' | 'sessions' | 'recordings' | 'snapshots';
 
 export interface ExportData {
   _meta: { version: number; exported_at: string };
   tags?: Omit<Tag, 'children'>[];
   venues?: Place[];
+  people?: Person[];
   sessions?: Session[];
   recordings?: Recording[];
   snapshots?: AnalysisSnapshot[];
   venue_tags?: { venue_id: number; tag_id: number }[];
+  person_tags?: { person_id: number; tag_id: number }[];
   recording_tags?: { recording_id: number; tag_id: number }[];
 }
 

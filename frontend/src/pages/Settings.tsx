@@ -10,11 +10,12 @@ import type { ExportableType, ExportData, ImportResult } from "../lib/types";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const EXPORTABLE_TYPES: ExportableType[] = ['tags', 'venues', 'sessions', 'recordings', 'snapshots'];
+const EXPORTABLE_TYPES: ExportableType[] = ['tags', 'venues', 'people', 'sessions', 'recordings', 'snapshots'];
 
 const TYPE_LABELS: Record<ExportableType, string> = {
   tags:       'Styles',
   venues:     'Places',
+  people:     'People',
   sessions:   'Sessions',
   recordings: 'Recordings',
   snapshots:  'Analysis Snapshots',
@@ -24,7 +25,7 @@ function getSample(items: unknown[] | undefined, type: ExportableType): string {
   if (!items || items.length === 0) return '';
   const sample = items.slice(0, 3).map((item) => {
     const r = item as Record<string, unknown>;
-    if (type === 'tags' || type === 'venues') return String(r.name ?? '');
+    if (type === 'tags' || type === 'venues' || type === 'people') return String(r.name ?? '');
     return String(r.started_at ?? r.captured_at ?? '').slice(0, 10);
   });
   return sample.join(', ') + (items.length > 3 ? '…' : '');

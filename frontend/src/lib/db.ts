@@ -12,7 +12,7 @@ import type { Database, SqlJsStatic } from "sql.js";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const initSqlJs: (config?: { locateFile?: (f: string) => string }) => Promise<SqlJsStatic> =
   (SqlJsModule as any).default ?? SqlJsModule;
-import type { Tag, Place, PlaceType, Session, Recording, AnalysisSnapshot, AllData, ExportableType, ExportData, ImportResult } from "./types";
+import type { Tag, Place, PlaceType, Person, PersonType, Session, Recording, AnalysisSnapshot, AllData, ExportableType, ExportData, ImportResult } from "./types";
 
 // ── IndexedDB helpers ─────────────────────────────────────────────────────────
 
@@ -161,6 +161,23 @@ function _applySchema(db: Database): void {
       venue_id  INTEGER NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
       tag_id    INTEGER NOT NULL REFERENCES tags(id)   ON DELETE CASCADE,
       PRIMARY KEY (venue_id, tag_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS people (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        TEXT NOT NULL,
+      type        TEXT DEFAULT 'dj' CHECK(type IN ('dj', 'musician', 'promoter', 'raver', 'other')),
+      city        TEXT,
+      instagram   TEXT,
+      ra_url      TEXT,
+      bio         TEXT,
+      created_at  TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS person_tags (
+      person_id  INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+      tag_id     INTEGER NOT NULL REFERENCES tags(id)   ON DELETE CASCADE,
+      PRIMARY KEY (person_id, tag_id)
     );
 
     CREATE TABLE IF NOT EXISTS analysis_snapshots (
@@ -466,6 +483,73 @@ export const updateVenue = updatePlace;
 /** @deprecated Use deletePlace instead */
 export const deleteVenue = deletePlace;
 
+// ── People ────────────────────────────────────────────────────────────────────
+
+export async function getPeople(): Promise<(Person & { tags: Tag[] })[]> {
+  const people = query<Person>("SELECT * FROM people ORDER BY name");
+  if (people.length === 0) return [];
+
+  type PT = { person_id: number } & Omit<Tag, 'children'>;
+  const rows = query<PT>(`
+    SELECT pt.person_id, t.id, t.name, t.color, t.slug, t.parent_id,
+           t.description, t.bpm_min, t.bpm_max, t.created_at
+    FROM person_tags pt JOIN tags t ON t.id = pt.tag_id
+    ORDER BY t.name
+  `);
+  const byPerson = new Map<number, Tag[]>();
+  for (const { person_id, ...t } of rows) {
+    if (!byPerson.has(person_id)) byPerson.set(person_id, []);
+    byPerson.get(person_id)!.push({ ...t, children: [] });
+  }
+  return people.map((p) => ({ ...p, tags: byPerson.get(p.id) ?? [] }));
+}
+
+export async function createPerson(input: {
+  name: string; type: PersonType;
+  city?: string | null; instagram?: string | null;
+  ra_url?: string | null; bio?: string | null;
+}): Promise<Person> {
+  run("INSERT INTO people (name, type, city, instagram, ra_url, bio) VALUES (?,?,?,?,?,?)",
+    [input.name, input.type, input.city ?? null, input.instagram ?? null,
+     input.ra_url ?? null, input.bio ?? null]);
+  const id = lastInsertRowid();
+  await _persist();
+  return query<Person>("SELECT * FROM people WHERE id = ?", [id])[0];
+}
+
+export async function updatePerson(
+  id: number,
+  input: Partial<Pick<Person, 'name' | 'type' | 'city' | 'instagram' | 'ra_url' | 'bio'>>
+): Promise<Person> {
+  const fields: string[] = [];
+  const vals: (string | number | null)[] = [];
+
+  if (input.name !== undefined)   { fields.push("name = ?");      vals.push(input.name); }
+  if (input.type !== undefined)   { fields.push("type = ?");      vals.push(input.type); }
+  if ("city" in input)            { fields.push("city = ?");      vals.push(input.city ?? null); }
+  if ("instagram" in input)       { fields.push("instagram = ?"); vals.push(input.instagram ?? null); }
+  if ("ra_url" in input)          { fields.push("ra_url = ?");    vals.push(input.ra_url ?? null); }
+  if ("bio" in input)             { fields.push("bio = ?");       vals.push(input.bio ?? null); }
+
+  if (fields.length === 0) throw new Error("Nothing to update");
+  run(`UPDATE people SET ${fields.join(", ")} WHERE id = ?`, [...vals, id]);
+  await _persist();
+  return query<Person>("SELECT * FROM people WHERE id = ?", [id])[0];
+}
+
+export async function deletePerson(id: number): Promise<void> {
+  run("DELETE FROM people WHERE id = ?", [id]);
+  await _persist();
+}
+
+export async function setPersonTags(personId: number, tagIds: number[]): Promise<void> {
+  run("DELETE FROM person_tags WHERE person_id = ?", [personId]);
+  for (const tid of tagIds) {
+    run("INSERT OR IGNORE INTO person_tags (person_id, tag_id) VALUES (?,?)", [personId, tid]);
+  }
+  await _persist();
+}
+
 // ── Sessions ──────────────────────────────────────────────────────────────────
 
 export async function getSessions(): Promise<Session[]> {
@@ -619,6 +703,7 @@ export function getDataCounts(): Record<ExportableType, number> {
   return {
     tags:       query<{ c: number }>("SELECT COUNT(*) AS c FROM tags")[0].c,
     venues:     query<{ c: number }>("SELECT COUNT(*) AS c FROM venues")[0].c,
+    people:     query<{ c: number }>("SELECT COUNT(*) AS c FROM people")[0].c,
     sessions:   query<{ c: number }>("SELECT COUNT(*) AS c FROM sessions")[0].c,
     recordings: query<{ c: number }>("SELECT COUNT(*) AS c FROM recordings")[0].c,
     snapshots:  query<{ c: number }>("SELECT COUNT(*) AS c FROM analysis_snapshots")[0].c,
@@ -640,6 +725,14 @@ export async function exportSelectedData(types: ExportableType[]): Promise<Expor
     );
     result.venue_tags = query<{ venue_id: number; tag_id: number }>(
       "SELECT venue_id, tag_id FROM venue_tags"
+    );
+  }
+  if (types.includes('people')) {
+    result.people = query<Person>(
+      "SELECT id, name, type, city, instagram, ra_url, bio, created_at FROM people"
+    );
+    result.person_tags = query<{ person_id: number; tag_id: number }>(
+      "SELECT person_id, tag_id FROM person_tags"
     );
   }
   if (types.includes('sessions')) {
@@ -678,6 +771,7 @@ export async function importData(
     if (selectedTypes.includes('recordings')) { run("DELETE FROM recording_tags"); run("DELETE FROM recordings"); }
     if (selectedTypes.includes('sessions'))   run("DELETE FROM sessions");
     if (selectedTypes.includes('venues'))     { run("DELETE FROM venue_tags"); run("DELETE FROM venues"); }
+    if (selectedTypes.includes('people'))     { run("DELETE FROM person_tags"); run("DELETE FROM people"); }
     if (selectedTypes.includes('tags'))       run("DELETE FROM tags");
     run("PRAGMA foreign_keys = ON");
   }
@@ -758,6 +852,44 @@ export async function importData(
   } else {
     for (const row of query<{ id: number }>("SELECT id FROM venues")) {
       venueIdMap.set(row.id, row.id);
+    }
+  }
+
+  // Step 2b: People (dedup by name)
+  const personIdMap   = new Map<number, number>();
+  if (selectedTypes.includes('people') && data.people) {
+    let imp = 0, skip = 0;
+    for (const person of data.people) {
+      const existing = query<{ id: number }>(
+        "SELECT id FROM people WHERE name = ?", [person.name]
+      );
+      if (existing.length > 0) {
+        personIdMap.set(person.id, existing[0].id);
+        skip++;
+      } else {
+        run(
+          "INSERT INTO people (name, type, city, instagram, ra_url, bio) VALUES (?,?,?,?,?,?)",
+          [person.name, person.type ?? 'dj', person.city, person.instagram,
+           person.ra_url, person.bio]
+        );
+        const newId = lastInsertRowid();
+        personIdMap.set(person.id, newId);
+        imp++;
+      }
+    }
+    if (data.person_tags) {
+      for (const pt of data.person_tags) {
+        const newPersonId = personIdMap.get(pt.person_id);
+        const newTagId    = tagIdMap.get(pt.tag_id);
+        if (newPersonId == null || newTagId == null) continue;
+        run("INSERT OR IGNORE INTO person_tags (person_id, tag_id) VALUES (?,?)", [newPersonId, newTagId]);
+      }
+    }
+    imported.people = imp;
+    skipped.people  = skip;
+  } else {
+    for (const row of query<{ id: number }>("SELECT id FROM people")) {
+      personIdMap.set(row.id, row.id);
     }
   }
 
@@ -865,6 +997,7 @@ export async function exportAllData(): Promise<AllData> {
   return {
     tags: await getTags(),
     venues: query<Place>("SELECT * FROM venues"),
+    people: query<Person>("SELECT * FROM people"),
     sessions: query<Session>("SELECT * FROM sessions"),
     recordings: query<Recording>("SELECT * FROM recordings"),
     snapshots: query<AnalysisSnapshot>("SELECT * FROM analysis_snapshots"),
@@ -880,6 +1013,8 @@ export async function clearAllData(): Promise<void> {
     DELETE FROM sessions;
     DELETE FROM venue_tags;
     DELETE FROM venues;
+    DELETE FROM person_tags;
+    DELETE FROM people;
     DELETE FROM tags;
   `);
   await _persist();
