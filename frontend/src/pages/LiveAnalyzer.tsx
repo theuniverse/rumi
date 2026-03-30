@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
-import { Circle, Square, MapPin, Tag, Navigation, Save, Check, X, Loader2, Plus, Trash2 } from "lucide-react";
+import { Circle, Square, MapPin, Tag, Navigation, Save, Check, X, Loader2, Plus, Trash2, Play } from "lucide-react";
 import { useAudioAnalyzer } from "../hooks/useAudioAnalyzer";
 import {
   startRecording, stopRecording, addRecordingTags,
@@ -10,6 +10,8 @@ import {
 } from "../lib/api";
 import { findNearbyPlaces, formatDistance, getCurrentLocation, PlaceWithDistance } from "../lib/location";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { useAudioPlayer } from "../contexts/AudioPlayerContext";
+import { recordingTitle, recordingMeta } from "../lib/recordingFormat";
 
 // ── Waveform canvas ───────────────────────────────────────────────────────────
 function Waveform({ data, active }: { data: number[]; active: boolean }) {
@@ -184,6 +186,7 @@ export default function LiveAnalyzer() {
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
 
   const { status, lastFrame, waveform, error, audioUrl, frames, start, stop } = useAudioAnalyzer();
+  const { playTrack } = useAudioPlayer();
 
   // When the backend finishes saving the WAV, persist the URL to the recording
   useEffect(() => {
@@ -418,6 +421,18 @@ export default function LiveAnalyzer() {
               </div>
             )}
             <div className="flex items-center gap-2 pt-2 border-t border-rim">
+              {audioUrl && (
+                <button
+                  onClick={() => playTrack(
+                    audioUrl,
+                    recordingTitle({ started_at: new Date().toISOString(), venue_name: null }),
+                    recordingMeta({ ...summary, started_at: new Date().toISOString(), ended_at: null }),
+                  )}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs border border-rim text-ghost hover:text-soft hover:border-muted transition-colors"
+                >
+                  <Play size={12} fill="currentColor" strokeWidth={0} className="translate-x-px" /> Play
+                </button>
+              )}
               {!saved ? (
                 <button
                   onClick={() => setShowSaveDialog(!showSaveDialog)}
@@ -616,18 +631,11 @@ export default function LiveAnalyzer() {
             Latest analysis
           </h3>
           <div className="space-y-2">
-            {recentRecordings.map((r) => (
+            {recentRecordings.filter((r) => r.id !== recordingId).map((r) => (
               <div key={r.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-surface border border-rim text-xs">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    {r.avg_bpm ? (
-                      <span className="font-mono text-soft font-semibold">{r.avg_bpm} <span className="text-faint font-normal">bpm</span></span>
-                    ) : (
-                      <span className="text-faint">—</span>
-                    )}
-                    {r.dominant_genre && (
-                      <span className="text-sand">{r.dominant_genre}</span>
-                    )}
+                    <span className="text-soft font-medium">{recordingTitle(r)}</span>
                     {r.session_id != null ? (
                       <span className="flex items-center gap-0.5 text-green-400/80">
                         <Check size={9} /> Saved
@@ -635,12 +643,16 @@ export default function LiveAnalyzer() {
                     ) : (
                       <span className="text-faint/60">Unsaved</span>
                     )}
+                    {r.audio_url && (
+                      <button
+                        onClick={() => playTrack(r.audio_url!, recordingTitle(r), recordingMeta(r))}
+                        className="flex items-center gap-1 text-faint hover:text-ghost transition-colors"
+                      >
+                        <Play size={9} fill="currentColor" strokeWidth={0} /> Play
+                      </button>
+                    )}
                   </div>
-                  <div className="text-faint mt-0.5">
-                    {new Date(r.started_at.replace(" ", "T") + "Z").toLocaleString("zh-CN", {
-                      month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-                    })}
-                  </div>
+                  <div className="text-faint mt-0.5">{recordingMeta(r) || "—"}</div>
                 </div>
                 <button
                   onClick={() => setDeleteTarget(r.id)}

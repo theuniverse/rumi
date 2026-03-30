@@ -553,7 +553,12 @@ export async function getRecordingsForSession(sessionId: number): Promise<Record
 
 export async function getRecentRecordings(source: string, limit = 3): Promise<Recording[]> {
   return query<Recording>(
-    "SELECT * FROM recordings WHERE source = ? AND ended_at IS NOT NULL ORDER BY started_at DESC LIMIT ?",
+    `SELECT r.*, v.name AS venue_name
+     FROM recordings r
+     LEFT JOIN sessions s ON s.id = r.session_id
+     LEFT JOIN venues v ON v.id = s.venue_id
+     WHERE r.source = ? AND r.ended_at IS NOT NULL
+     ORDER BY r.started_at DESC LIMIT ?`,
     [source, limit]
   );
 }

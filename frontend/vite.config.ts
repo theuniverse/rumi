@@ -114,15 +114,24 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      // Dev-only: BASE_URL is /rumi/ so requests arrive with /rumi/ prefix
+      "/rumi/api": {
+        target: "http://localhost:8000",
+        rewrite: (path) => path.replace(/^\/rumi/, ""),
+      },
+      "/rumi/storage": {
+        target: "http://localhost:8000",
+        rewrite: (path) => path.replace(/^\/rumi/, ""),
+      },
+      "/rumi/ws": {
+        target: "ws://localhost:8000",
+        ws: true,
+        rewrite: (path) => path.replace(/^\/rumi/, ""),
+      },
+      // Direct (no base prefix) fallback
       "/api": "http://localhost:8000",
       "/storage": "http://localhost:8000",
       "/ws": { target: "ws://localhost:8000", ws: true },
-      "/analyze": {
-        target: "http://localhost:8000",
-        bypass(req) {
-          if (req.headers.accept?.includes("text/html")) return "/index.html";
-        },
-      },
     },
   },
 });

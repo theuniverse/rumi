@@ -61,6 +61,8 @@ export interface Recording {
   source: string | null;   // 'live' | 'video' | null
   audio_url: string | null;
   created_at: string;
+  /** Joined from sessions → venues, populated by getRecentRecordings */
+  venue_name?: string | null;
 }
 
 export interface AnalysisSnapshot {

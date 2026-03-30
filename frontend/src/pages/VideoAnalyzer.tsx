@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Upload, Music, Play, Loader2, MapPin, Plus, Check, X, Save, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import clsx from "clsx";
 import { useAudioPlayer } from "../contexts/AudioPlayerContext";
+import { recordingTitle, recordingMeta } from "../lib/recordingFormat";
 import {
   Place,
   PlaceType,
@@ -55,11 +56,6 @@ const TUTORIAL_AUDIOS: TutorialAudio[] = [
   }
 ];
 
-function formatRecordingTime(iso: string) {
-  return new Date(iso.replace(" ", "T") + "Z").toLocaleString("zh-CN", {
-    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-  });
-}
 
 export default function VideoAnalyzer() {
   // Upload area
@@ -114,9 +110,14 @@ export default function VideoAnalyzer() {
     const formData = new FormData();
     formData.append("file", uploadedFile, uploadedFile.name);
 
-    fetch(`${import.meta.env.BASE_URL}analyze/file`, { method: "POST", body: formData })
+    fetch(`${import.meta.env.BASE_URL}api/analyze/file`, { method: "POST", body: formData })
       .then(async (res) => {
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) {
+          const body = await res.text();
+          let msg = body;
+          try { msg = JSON.parse(body)?.detail ?? body; } catch { /* use raw */ }
+          throw new Error(msg);
+        }
         return res.json();
       })
       .then((data: AnalysisResult) => {
@@ -155,7 +156,8 @@ export default function VideoAnalyzer() {
   };
 
   const isAudioFile = (file: File) =>
-    file.type.startsWith("audio/") || file.type.startsWith("video/");
+    file.type.startsWith("audio/") || file.type.startsWith("video/") ||
+    /\.(mov|mp4|m4v|avi|mkv|webm|flv|wmv|3gp)$/i.test(file.name);
 
   const handleCreatePlace = async () => {
     if (!newPlaceName.trim()) return;
@@ -230,12 +232,12 @@ export default function VideoAnalyzer() {
             : uploadedFile ? uploadedFile.name : "Drop audio/video file here or click to browse"}
         </p>
         <p className="text-ghost text-xs">
-          {isUploading ? "Please wait" : "Supports WAV, MP3, MP4, M4A, FLAC, OGG"}
+          {isUploading ? "Please wait" : "Supports WAV, MP3, MP4, MOV, M4A, FLAC, OGG"}
         </p>
         <input
           ref={fileInputRef}
           type="file"
-          accept="audio/*,video/*"
+          accept="audio/*,video/*,.mov"
           onChange={handleFileSelect}
           className="hidden"
           disabled={isUploading}
@@ -271,6 +273,21 @@ export default function VideoAnalyzer() {
               </div>
             </div>
             <div className="flex items-center gap-2 pt-2 border-t border-rim">
+              {uploadResult.audio_url && (
+                <button
+                  onClick={() => {
+                    const now = new Date().toISOString();
+                    playTrack(
+                      uploadResult.audio_url!,
+                      recordingTitle({ started_at: now, venue_name: null }),
+                      recordingMeta({ dominant_genre: uploadResult.genre_hint, avg_bpm: uploadResult.bpm, started_at: now, ended_at: null }),
+                    );
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs border border-rim text-ghost hover:text-soft hover:border-muted transition-colors"
+                >
+                  <Play size={12} fill="currentColor" strokeWidth={0} className="translate-x-px" /> Play
+                </button>
+              )}
               {!saved ? (
                 <button
                   onClick={() => setShowSaveDialog(!showSaveDialog)}
@@ -403,16 +420,7 @@ export default function VideoAnalyzer() {
               <div key={r.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-surface border border-rim text-xs">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    {r.avg_bpm ? (
-                      <span className="font-mono text-soft font-semibold">
-                        {r.avg_bpm} <span className="text-faint font-normal">bpm</span>
-                      </span>
-                    ) : (
-                      <span className="text-faint">—</span>
-                    )}
-                    {r.dominant_genre && (
-                      <span className="text-sand">{r.dominant_genre}</span>
-                    )}
+                    <span className="text-soft font-medium">{recordingTitle(r)}</span>
                     {r.session_id != null ? (
                       <span className="flex items-center gap-0.5 text-green-400/80">
                         <Check size={9} /> Saved
@@ -422,18 +430,14 @@ export default function VideoAnalyzer() {
                     )}
                     {r.audio_url && (
                       <button
-                        onClick={() => playTrack(
-                          r.audio_url!,
-                          r.dominant_genre ?? "Recording",
-                          `${formatRecordingTime(r.started_at)}${r.avg_bpm ? ` · ${r.avg_bpm} bpm` : ""}`,
-                        )}
+                        onClick={() => playTrack(r.audio_url!, recordingTitle(r), recordingMeta(r))}
                         className="flex items-center gap-1 text-faint hover:text-ghost transition-colors"
                       >
                         <Play size={9} fill="currentColor" strokeWidth={0} /> Play
                       </button>
                     )}
                   </div>
-                  <div className="text-faint mt-0.5">{formatRecordingTime(r.started_at)}</div>
+                  <div className="text-faint mt-0.5">{recordingMeta(r) || "—"}</div>
                 </div>
                 <button
                   onClick={() => setDeleteTarget(r.id)}
@@ -525,7 +529,7 @@ function TutorialBlock({ audio, onSaved }: { audio: TutorialAudio; onSaved: () =
       const formData = new FormData();
       formData.append("file", blob, audio.name.toLowerCase() + ".wav");
 
-      const analyzeResponse = await fetch(`${import.meta.env.BASE_URL}analyze/file`, { method: "POST", body: formData });
+      const analyzeResponse = await fetch(`${import.meta.env.BASE_URL}api/analyze/file`, { method: "POST", body: formData });
       if (!analyzeResponse.ok) {
         const errorText = await analyzeResponse.text();
         throw new Error(`Analysis failed: ${errorText}`);

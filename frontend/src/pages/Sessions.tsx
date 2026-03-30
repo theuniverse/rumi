@@ -7,6 +7,7 @@ import {
 } from "../lib/api";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { useAudioPlayer } from "../contexts/AudioPlayerContext";
+import { recordingTitle, recordingMeta } from "../lib/recordingFormat";
 
 interface RecordingWithTags extends Recording { tags: Tag[] }
 interface SessionWithRecordings extends Session { recordings: RecordingWithTags[] }
@@ -324,8 +325,8 @@ export default function Sessions() {
                           <button
                             onClick={() => playTrack(
                               r.audio_url!,
-                              r.dominant_genre ?? "Recording",
-                              `${formatTime(r.started_at)}${r.avg_bpm ? ` · ${r.avg_bpm} bpm` : ""}`,
+                              recordingTitle({ ...r, venue_name: s.venue_name }),
+                              recordingMeta(r),
                             )}
                             className="mt-2 flex items-center gap-1.5 text-[10px] text-faint hover:text-ghost transition-colors"
                           >

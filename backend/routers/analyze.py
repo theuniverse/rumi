@@ -1,7 +1,10 @@
 import asyncio
 import json
 import logging
+import os
 import struct
+import subprocess
+import tempfile
 import time
 import wave
 from concurrent.futures import ThreadPoolExecutor
@@ -24,6 +27,48 @@ OVERLAP_SECS = 4
 
 STORAGE_DIR = Path(__file__).parent.parent / "storage"
 
+_VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm", ".flv", ".wmv", ".3gp"}
+
+
+def _extract_audio_if_video(content: bytes, original_name: str) -> tuple[bytes, str, str | None]:
+    """Extract audio from a video file using ffmpeg.
+    Returns (audio_bytes, effective_name, tmp_path_to_cleanup).
+    - If not a video: (content, original_name, None)
+    - If ffmpeg succeeds: (wav_bytes, stem.wav, None)
+    - If ffmpeg missing: (content, original_name, tmp_video_path) — caller must
+      pass tmp_video_path to librosa and delete it afterwards (AVFoundation needs
+      a real file path, not BytesIO).
+    """
+    ext = Path(original_name).suffix.lower()
+    if ext not in _VIDEO_EXTENSIONS:
+        return content, original_name, None
+
+    tmp_in = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+    try:
+        tmp_in.write(content)
+        tmp_in.close()
+        tmp_out_path = tmp_in.name + ".wav"
+        try:
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", tmp_in.name, "-vn", "-ac", "1", "-ar", "44100", tmp_out_path],
+                capture_output=True,
+                check=True,
+                timeout=120,
+            )
+            with open(tmp_out_path, "rb") as f:
+                return f.read(), Path(original_name).stem + ".wav", None
+        except FileNotFoundError:
+            # ffmpeg not installed — return the temp file path so librosa can
+            # open it directly (required for AVFoundation on macOS)
+            logger.warning("ffmpeg not found, will pass file path to librosa for %s", original_name)
+            return content, original_name, tmp_in.name  # caller cleans up
+        finally:
+            if os.path.exists(tmp_out_path):
+                os.unlink(tmp_out_path)
+    except Exception:
+        os.unlink(tmp_in.name)
+        raise
+
 
 def _save_live_wav(all_samples: list, sample_rate: int) -> str:
     """Convert accumulated float32 PCM to a 16-bit mono WAV and return its URL path."""
@@ -40,10 +85,10 @@ def _save_live_wav(all_samples: list, sample_rate: int) -> str:
     return f"/storage/live/{filename}"
 
 
-def _save_upload(content: bytes, original_name: str) -> str:
-    """Save an uploaded file to storage/uploads/ and return its URL path."""
+def _save_upload(content: bytes, effective_name: str) -> str:
+    """Save bytes to storage/uploads/ and return its URL path."""
     (STORAGE_DIR / "uploads").mkdir(parents=True, exist_ok=True)
-    ext = Path(original_name).suffix or ".bin"
+    ext = Path(effective_name).suffix or ".bin"
     filename = f"upload_{int(time.time() * 1000)}{ext}"
     (STORAGE_DIR / "uploads" / filename).write_bytes(content)
     return f"/storage/uploads/{filename}"
@@ -128,7 +173,7 @@ async def analyze_stream(websocket: WebSocket):
 
 
 
-@router.post("/analyze/file")
+@router.post("/api/analyze/file")
 async def analyze_file(file: UploadFile = File(...)):
     """
     Analyze an uploaded audio file and return BPM + genre hint.
@@ -139,14 +184,26 @@ async def analyze_file(file: UploadFile = File(...)):
     """
     try:
         content = await file.read()
-
+        original_name = file.filename or "upload.bin"
         loop = asyncio.get_running_loop()
 
-        # Save file and analyze in parallel via executor
-        original_name = file.filename or "upload"
-        audio_url = await loop.run_in_executor(_executor, _save_upload, content, original_name)
+        # Extract audio track if this is a video file (MOV, MP4, etc.)
+        audio_content, effective_name, tmp_video_path = await loop.run_in_executor(
+            _executor, _extract_audio_if_video, content, original_name
+        )
 
-        audio, sample_rate = librosa.load(BytesIO(content), sr=None, mono=True)
+        audio_url = await loop.run_in_executor(_executor, _save_upload, audio_content, effective_name)
+
+        # Use file path when ffmpeg was absent (AVFoundation needs a real path)
+        load_src = tmp_video_path if tmp_video_path else BytesIO(audio_content)
+        try:
+            audio, sample_rate = await loop.run_in_executor(
+                _executor, lambda: librosa.load(load_src, sr=None, mono=True)
+            )
+        finally:
+            if tmp_video_path and os.path.exists(tmp_video_path):
+                os.unlink(tmp_video_path)
+
         result = await loop.run_in_executor(_executor, analyze_chunk, audio, sample_rate)
 
         return {
