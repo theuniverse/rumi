@@ -37,19 +37,19 @@ interface TutorialAudio {
 const TUTORIAL_AUDIOS: TutorialAudio[] = [
   {
     name: "Ambient",
-    path: "/test-audio/ambient_82bpm.wav",
+    path: `${import.meta.env.BASE_URL}test-audio/ambient_82bpm.wav`,
     expectedBpm: 82,
     description: "Slow, atmospheric ambient track"
   },
   {
     name: "House",
-    path: "/test-audio/house_124bpm.wav",
+    path: `${import.meta.env.BASE_URL}test-audio/house_124bpm.wav`,
     expectedBpm: 124,
     description: "Classic house music groove"
   },
   {
     name: "Techno",
-    path: "/test-audio/techno_138bpm.wav",
+    path: `${import.meta.env.BASE_URL}test-audio/techno_138bpm.wav`,
     expectedBpm: 138,
     description: "High-energy techno beat"
   }
@@ -62,21 +62,72 @@ function formatRecordingTime(iso: string) {
 }
 
 export default function VideoAnalyzer() {
+  // Upload area
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // History
   const [recentRecordings, setRecentRecordings] = useState<Recording[]>([]);
   const [showExamples, setShowExamples] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const { playTrack } = useAudioPlayer();
+
+  // Upload analysis state
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<AnalysisResult | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Save to session
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [places, setPlaces] = useState<Place[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null);
+  const [selectedTags, setSelectedTags] = useState<Set<number>>(new Set());
+  const [isSaving, setIsSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [showPlaceForm, setShowPlaceForm] = useState(false);
+  const [newPlaceName, setNewPlaceName] = useState("");
+  const [newPlaceType, setNewPlaceType] = useState<PlaceType>("club");
+  const [newPlaceAddress, setNewPlaceAddress] = useState("");
 
   const loadRecent = useCallback(() => {
     getRecentRecordings("video").then(setRecentRecordings).catch(() => {});
   }, []);
 
   useEffect(() => { loadRecent(); }, [loadRecent]);
+  useEffect(() => {
+    getPlaces().then(setPlaces).catch(() => {});
+    getTags().then(setTags).catch(() => {});
+  }, []);
+
+  // Auto-upload and analyze when file is selected
+  useEffect(() => {
+    if (!uploadedFile) return;
+    let cancelled = false;
+    setIsUploading(true);
+    setUploadError(null);
+    setUploadResult(null);
+    setSaved(false);
+    setShowSaveDialog(false);
+
+    const formData = new FormData();
+    formData.append("file", uploadedFile, uploadedFile.name);
+
+    fetch(`${import.meta.env.BASE_URL}analyze/file`, { method: "POST", body: formData })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      })
+      .then((data) => { if (!cancelled) setUploadResult(data); })
+      .catch((err) => { if (!cancelled) setUploadError(err instanceof Error ? err.message : "Analysis failed"); })
+      .finally(() => { if (!cancelled) setIsUploading(false); });
+
+    return () => { cancelled = true; };
+  }, [uploadedFile]);
 
   const handleDragOver = (e: React.DragEvent) => {
+    if (isUploading) return;
     e.preventDefault();
     setIsDragging(true);
   };
@@ -86,17 +137,55 @@ export default function VideoAnalyzer() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
+    if (isUploading) return;
     const file = e.dataTransfer.files[0];
     if (file && isAudioFile(file)) setUploadedFile(file);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isUploading) return;
     const file = e.target.files?.[0];
     if (file) setUploadedFile(file);
+    e.target.value = "";
   };
 
   const isAudioFile = (file: File) =>
     file.type.startsWith("audio/") || file.type.startsWith("video/");
+
+  const handleCreatePlace = async () => {
+    if (!newPlaceName.trim()) return;
+    try {
+      const place = await createPlace({ name: newPlaceName.trim(), type: newPlaceType, address: newPlaceAddress.trim() || null, city: undefined });
+      setPlaces([...places, place]);
+      setSelectedPlaceId(place.id);
+      setShowPlaceForm(false);
+      setNewPlaceName(""); setNewPlaceType("club"); setNewPlaceAddress("");
+    } catch (err) { console.error("Failed to create place:", err); }
+  };
+
+  const toggleTag = (id: number) => {
+    setSelectedTags((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  };
+
+  const handleSaveToSession = async () => {
+    if (!uploadResult) return;
+    setIsSaving(true);
+    try {
+      const session = await createSession({ venue_id: selectedPlaceId ?? null });
+      const recording = await startRecording({ session_id: session.id, source: "video" });
+      await stopRecording(recording.id, {
+        avg_bpm: uploadResult.bpm, min_bpm: uploadResult.bpm, max_bpm: uploadResult.bpm,
+        dominant_genre: uploadResult.genre_hint, audio_url: uploadResult.audio_url ?? null,
+      });
+      if (selectedTags.size > 0) await addRecordingTags(recording.id, [...selectedTags]);
+      setSaved(true);
+      setShowSaveDialog(false);
+      loadRecent();
+    } catch (err) {
+      console.error("Failed to save:", err);
+      setUploadError("Failed to save to session");
+    } finally { setIsSaving(false); }
+  };
 
   const hasHistory = recentRecordings.length > 0;
 
@@ -116,20 +205,27 @@ export default function VideoAnalyzer() {
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => !isUploading && fileInputRef.current?.click()}
         className={clsx(
-          "flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors mb-12",
-          isDragging
-            ? "border-sand bg-sand/5"
-            : "border-rim hover:border-muted hover:bg-surface"
+          "flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-lg text-center transition-colors mb-6",
+          isUploading
+            ? "border-sand/30 bg-sand/5 cursor-not-allowed"
+            : isDragging
+              ? "border-sand bg-sand/5 cursor-pointer"
+              : "border-rim hover:border-muted hover:bg-surface cursor-pointer"
         )}
       >
-        <Upload size={32} strokeWidth={1} className="text-faint mb-4" />
+        {isUploading
+          ? <Loader2 size={32} strokeWidth={1} className="text-sand mb-4 animate-spin" />
+          : <Upload size={32} strokeWidth={1} className="text-faint mb-4" />
+        }
         <p className="text-soft text-sm mb-1">
-          {uploadedFile ? uploadedFile.name : "Drop audio/video file here or click to browse"}
+          {isUploading
+            ? "Uploading and analyzing..."
+            : uploadedFile ? uploadedFile.name : "Drop audio/video file here or click to browse"}
         </p>
         <p className="text-ghost text-xs">
-          Supports WAV, MP3, MP4, M4A, FLAC, OGG
+          {isUploading ? "Please wait" : "Supports WAV, MP3, MP4, M4A, FLAC, OGG"}
         </p>
         <input
           ref={fileInputRef}
@@ -137,8 +233,138 @@ export default function VideoAnalyzer() {
           accept="audio/*,video/*"
           onChange={handleFileSelect}
           className="hidden"
+          disabled={isUploading}
         />
       </div>
+
+      {/* Upload result */}
+      {uploadError && (
+        <div className="mb-6 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+          <p className="text-xs text-red-400">{uploadError}</p>
+        </div>
+      )}
+
+      {uploadResult && !isUploading && (
+        <div className="mb-8 space-y-3">
+          <div className="p-3 rounded-lg bg-surface border border-rim">
+            <div className="grid grid-cols-2 gap-3 text-xs mb-3">
+              <div>
+                <span className="text-ghost block mb-0.5">Detected BPM</span>
+                <span className="text-soft font-mono text-lg font-semibold">{uploadResult.bpm}</span>
+              </div>
+              <div>
+                <span className="text-ghost block mb-0.5">Genre</span>
+                <span className="text-sand text-sm">{uploadResult.genre_hint}</span>
+              </div>
+              <div>
+                <span className="text-ghost block mb-0.5">Confidence</span>
+                <span className="text-soft font-mono">{Math.round(uploadResult.confidence * 100)}%</span>
+              </div>
+              <div>
+                <span className="text-ghost block mb-0.5">Stability</span>
+                <span className="text-soft font-mono">{Math.round(uploadResult.stability * 100)}%</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pt-2 border-t border-rim">
+              {!saved ? (
+                <button
+                  onClick={() => setShowSaveDialog(!showSaveDialog)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-sand/10 border border-sand/30 text-sand hover:bg-sand/20 transition-colors"
+                >
+                  <Save size={12} /> Save to Session
+                </button>
+              ) : (
+                <span className="flex items-center gap-1.5 text-xs text-green-400">
+                  <Check size={12} /> Saved to Sessions
+                </span>
+              )}
+            </div>
+          </div>
+
+          {showSaveDialog && !saved && (
+            <div className="p-4 rounded-lg bg-base border border-sand/30">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-medium text-soft">Save to Session</h4>
+                <button onClick={() => setShowSaveDialog(false)} className="text-ghost hover:text-soft transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <MapPin size={12} className="text-faint" />
+                  <span className="text-xs text-ghost">Place (Optional)</span>
+                </div>
+                {!showPlaceForm ? (
+                  <div className="space-y-2">
+                    <select
+                      value={selectedPlaceId ?? ""}
+                      onChange={(e) => setSelectedPlaceId(e.target.value ? Number(e.target.value) : null)}
+                      className="w-full px-2.5 py-1.5 rounded bg-surface border border-rim text-soft text-xs focus:outline-none focus:border-muted"
+                    >
+                      <option value="">No place</option>
+                      {places.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}{p.address ? ` - ${p.address}` : ""}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => setShowPlaceForm(true)}
+                      className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-rim text-ghost hover:text-soft hover:border-muted transition-colors"
+                    >
+                      <Plus size={10} /> Add new place
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <input type="text" placeholder="Place name" value={newPlaceName} onChange={(e) => setNewPlaceName(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded bg-surface border border-rim text-soft text-xs focus:outline-none focus:border-muted" />
+                    <select value={newPlaceType} onChange={(e) => setNewPlaceType(e.target.value as PlaceType)}
+                      className="w-full px-2.5 py-1.5 rounded bg-surface border border-rim text-soft text-xs focus:outline-none focus:border-muted">
+                      <option value="venue">🎭 Venue</option>
+                      <option value="club">🎵 Club</option>
+                      <option value="other">🏠 Other</option>
+                    </select>
+                    <input type="text" placeholder="Address (optional)" value={newPlaceAddress} onChange={(e) => setNewPlaceAddress(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded bg-surface border border-rim text-soft text-xs focus:outline-none focus:border-muted" />
+                    <div className="flex gap-2">
+                      <button onClick={handleCreatePlace} disabled={!newPlaceName.trim()}
+                        className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-sand/10 border border-sand/30 text-sand hover:bg-sand/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <Check size={10} /> Create
+                      </button>
+                      <button onClick={() => { setShowPlaceForm(false); setNewPlaceName(""); setNewPlaceType("club"); setNewPlaceAddress(""); }}
+                        className="px-2 py-1 rounded text-xs border border-rim text-ghost hover:text-soft hover:border-muted transition-colors">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {tags.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs text-ghost mb-2">Tags (Optional)</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {tags.map((t) => {
+                      const active = selectedTags.has(t.id);
+                      return (
+                        <button key={t.id} onClick={() => toggleTag(t.id)}
+                          className={clsx("px-2 py-0.5 rounded text-xs border transition-colors",
+                            active ? "border-sand/50 text-sand bg-sand/10" : "border-rim text-ghost hover:border-muted hover:text-soft")}
+                          style={active ? { borderColor: t.color + "88", color: t.color ?? undefined } : {}}>
+                          {t.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              <button onClick={handleSaveToSession} disabled={isSaving}
+                className={clsx("w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded text-sm font-medium transition-colors",
+                  isSaving ? "bg-sand/10 border border-sand/30 text-sand/50 cursor-not-allowed" : "bg-sand/10 border border-sand/30 text-sand hover:bg-sand/20")}>
+                {isSaving ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : <><Check size={14} /> Save</>}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Latest Analysis — shown when history exists */}
       {hasHistory && (
@@ -333,13 +559,9 @@ function TutorialBlock({ audio, onSaved }: { audio: TutorialAudio; onSaved: () =
     if (!result) return;
     setIsSaving(true);
     try {
-      let sessionId = null;
-      if (selectedPlaceId) {
-        const session = await createSession({ venue_id: selectedPlaceId });
-        sessionId = session.id;
-      }
+      const session = await createSession({ venue_id: selectedPlaceId ?? null });
       const recording = await startRecording({
-        session_id: sessionId,
+        session_id: session.id,
         latitude: null,
         longitude: null,
         source: "video",
