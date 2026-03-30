@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Plus, Pencil, Trash2, Check, X, Users, Instagram, ExternalLink } from "lucide-react";
 import clsx from "clsx";
 import { Tag, Person, PersonType, getTags, getPeople, createPerson, updatePerson, deletePerson, setPersonTags } from "../lib/api";
@@ -56,7 +56,7 @@ function TagPicker({
 }) {
   if (allTags.length === 0) return <span className="text-faint text-xs">No styles yet</span>;
   return (
-    <div className="flex flex-wrap gap-1.5 pt-1 pb-2">
+    <div className="flex flex-wrap gap-1.5">
       {allTags.map((t) => {
         const active = selected.has(t.id);
         return (
@@ -108,10 +108,23 @@ function PersonRow({
   const [ra_url, setRaUrl] = useState(person.ra_url ?? "");
   const [bio, setBio] = useState(person.bio ?? "");
   const [tagIds, setTagIds] = useState<Set<number>>(new Set(person.tags.map((t) => t.id)));
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) nameRef.current?.focus();
+  }, [editing]);
+
+  const toggle = (id: number) =>
+    setTagIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   const save = async () => {
+    if (!name.trim()) return;
     await updatePerson(person.id, {
-      name: name.trim() || person.name,
+      name: name.trim(),
       type,
       city: city.trim() || null,
       instagram: instagram.trim() || null,
@@ -123,184 +136,202 @@ function PersonRow({
     onUpdated();
   };
 
+  const cancel = () => {
+    setName(person.name);
+    setType(person.type);
+    setCity(person.city ?? "");
+    setInstagram(person.instagram ?? "");
+    setRaUrl(person.ra_url ?? "");
+    setBio(person.bio ?? "");
+    setTagIds(new Set(person.tags.map((t) => t.id)));
+    setEditing(false);
+  };
+
   const remove = async () => {
     if (!confirm(`Delete "${person.name}"?`)) return;
     await deletePerson(person.id);
     onDeleted();
   };
 
-  if (editing) {
-    return (
-      <div className="space-y-3 p-3 bg-elevated rounded border border-rim">
-        {/* Main row: name + type | city | instagram + ra_url | actions */}
-        <div className="grid grid-cols-4 gap-3 items-center">
-          <div className="flex gap-2 items-center">
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Name"
-              className="flex-1 bg-surface border border-rim rounded px-2 py-1 text-sm text-soft outline-none focus:border-muted"
-            />
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as PersonType)}
-              className="bg-surface border border-rim rounded px-2 py-1 text-xs text-soft outline-none focus:border-muted"
-            >
-              <option value="dj">DJ</option>
-              <option value="musician">Musician</option>
-              <option value="promoter">Promoter</option>
-              <option value="raver">Raver</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-          <input
-            type="text"
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            placeholder="City"
-            className="bg-surface border border-rim rounded px-2 py-1 text-sm text-soft outline-none focus:border-muted"
-          />
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={instagram}
-              onChange={(e) => setInstagram(e.target.value)}
-              placeholder="Instagram handle"
-              className="flex-1 bg-surface border border-rim rounded px-2 py-1 text-sm text-soft outline-none focus:border-muted text-xs"
-            />
-            <input
-              type="url"
-              value={ra_url}
-              onChange={(e) => setRaUrl(e.target.value)}
-              placeholder="RA URL"
-              className="flex-1 bg-surface border border-rim rounded px-2 py-1 text-sm text-soft outline-none focus:border-muted text-xs"
-            />
-          </div>
-          <div className="flex gap-2 justify-end">
-            <button
-              onClick={save}
-              className="p-1.5 rounded hover:bg-green-400/20 text-green-400 transition-colors"
-              title="Save"
-            >
-              <Check size={16} />
-            </button>
-            <button
-              onClick={() => setEditing(false)}
-              className="p-1.5 rounded hover:bg-red-400/20 text-red-400 transition-colors"
-              title="Cancel"
-            >
-              <X size={16} />
-            </button>
-          </div>
+  return (
+    <div className={clsx("border-b border-rim/60 transition-colors", editing ? "bg-elevated" : "hover:bg-elevated/40 group")}>
+      {/* Main row */}
+      <div className="flex items-center gap-3 px-4 py-3 text-sm">
+        {/* Name & Type */}
+        <div className="w-40 shrink-0">
+          {editing ? (
+            <div className="space-y-1.5">
+              <input
+                ref={nameRef}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") cancel(); }}
+                placeholder="Person name"
+                className="w-full bg-transparent text-soft outline-none border-b border-sand/50 pb-px placeholder:text-faint"
+              />
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as PersonType)}
+                className="w-full bg-surface border border-rim rounded px-1.5 py-0.5 text-xs text-soft focus:outline-none focus:border-muted"
+              >
+                <option value="dj">DJ</option>
+                <option value="musician">Musician</option>
+                <option value="promoter">Promoter</option>
+                <option value="raver">Raver</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <span className="text-soft font-medium truncate block">{person.name}</span>
+              <PersonTypeBadge type={person.type} />
+            </div>
+          )}
         </div>
 
-        {/* Expanded section: bio + tags */}
-        <div className="space-y-2 pl-3">
+        {/* City */}
+        <div className="w-32 shrink-0">
+          {editing ? (
+            <input
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") cancel(); }}
+              placeholder="City (optional)"
+              className="w-full bg-transparent text-ghost outline-none border-b border-sand/30 pb-px placeholder:text-faint"
+            />
+          ) : person.city ? (
+            <span className="text-ghost text-xs truncate block">{person.city}</span>
+          ) : (
+            <span className="text-faint text-xs italic">No city</span>
+          )}
+        </div>
+
+        {/* Social Links */}
+        <div className="flex-1 min-w-0">
+          {!editing && (
+            <div className="flex items-center gap-2">
+              {person.instagram && (
+                <a
+                  href={`https://instagram.com/${person.instagram}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-pink-400 hover:text-pink-300 transition-colors"
+                  title={`@${person.instagram}`}
+                >
+                  <Instagram size={14} />
+                </a>
+              )}
+              {person.ra_url && (
+                <a
+                  href={person.ra_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 transition-colors"
+                  title="Resident Advisor"
+                >
+                  <ExternalLink size={14} />
+                </a>
+              )}
+              {!person.instagram && !person.ra_url && <span className="text-faint text-xs">—</span>}
+            </div>
+          )}
+        </div>
+
+        {/* Styles (view) */}
+        <div className="w-48 shrink-0">
+          {!editing && <TagPills tags={person.tags} />}
+        </div>
+
+        {/* Actions */}
+        <div
+          className={clsx(
+            "flex items-center gap-1 w-12 shrink-0 justify-end",
+            editing ? "visible" : "invisible group-hover:visible"
+          )}
+        >
+          {editing ? (
+            <>
+              <button onClick={save} disabled={!name.trim()} className="p-1 text-live hover:text-live/80 disabled:opacity-40 transition-colors">
+                <Check size={13} />
+              </button>
+              <button onClick={cancel} className="p-1 text-ghost hover:text-soft transition-colors">
+                <X size={13} />
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setEditing(true)} className="p-1 text-ghost hover:text-soft transition-colors">
+                <Pencil size={13} />
+              </button>
+              <button onClick={remove} className="p-1 text-ghost hover:text-red-400 transition-colors">
+                <Trash2 size={13} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded edit section */}
+      {editing && (
+        <div className="px-4 pb-3 space-y-3">
+          {/* Social Links */}
           <div>
-            <label className="block text-xs text-ghost mb-1">Bio</label>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs text-ghost">Social</span>
+            </div>
+            <div className="space-y-1.5">
+              <input
+                type="text"
+                value={instagram}
+                onChange={(e) => setInstagram(e.target.value)}
+                placeholder="Instagram handle (e.g., djname)"
+                className="w-full px-2 py-1 rounded bg-surface border border-rim text-soft text-xs focus:outline-none focus:border-muted placeholder:text-faint"
+              />
+              <input
+                type="url"
+                value={ra_url}
+                onChange={(e) => setRaUrl(e.target.value)}
+                placeholder="Resident Advisor profile URL"
+                className="w-full px-2 py-1 rounded bg-surface border border-rim text-soft text-xs focus:outline-none focus:border-muted placeholder:text-faint"
+              />
+            </div>
+          </div>
+
+          {/* Bio */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs text-ghost">Bio</span>
+            </div>
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              placeholder="Bio or notes"
+              placeholder="Bio or notes (optional)"
               rows={2}
-              className="w-full bg-surface border border-rim rounded px-2 py-1 text-sm text-soft outline-none focus:border-muted resize-none"
+              className="w-full px-2 py-1 rounded bg-surface border border-rim text-soft text-xs focus:outline-none focus:border-muted placeholder:text-faint resize-none"
             />
           </div>
-          <div>
-            <label className="block text-xs text-ghost mb-1">Styles</label>
-            <TagPicker
-              allTags={allTags}
-              selected={tagIds}
-              onToggle={(id) => {
-                const newSet = new Set(tagIds);
-                if (newSet.has(id)) newSet.delete(id);
-                else newSet.add(id);
-                setTagIds(newSet);
-              }}
-            />
-          </div>
-        </div>
-      </div>
-    );
-  }
 
-  // View mode: table row
-  return (
-    <div className="grid grid-cols-4 gap-3 items-center p-3 border-b border-rim hover:bg-elevated/30 group">
-      {/* Col 1: Name & Type */}
-      <div className="flex items-center gap-2 min-w-0">
-        <div className="flex flex-col gap-1 min-w-0">
-          <div className="font-medium text-soft text-sm truncate">{person.name}</div>
-          <PersonTypeBadge type={person.type} />
+          {/* Tags */}
+          {allTags.length > 0 && (
+            <div>
+              <TagPicker allTags={allTags} selected={tagIds} onToggle={toggle} />
+            </div>
+          )}
         </div>
-      </div>
-
-      {/* Col 2: City */}
-      <div className="text-sm text-ghost">
-        {person.city ? <span>{person.city}</span> : <span className="text-faint">—</span>}
-      </div>
-
-      {/* Col 3: Social Links */}
-      <div className="flex items-center gap-2">
-        {person.instagram && (
-          <a
-            href={`https://instagram.com/${person.instagram}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-pink-400 hover:text-pink-300 transition-colors"
-            title={`@${person.instagram}`}
-          >
-            <Instagram size={16} />
-          </a>
-        )}
-        {person.ra_url && (
-          <a
-            href={person.ra_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-0.5"
-            title="Resident Advisor"
-          >
-            <ExternalLink size={16} />
-          </a>
-        )}
-        {!person.instagram && !person.ra_url && <span className="text-faint text-xs">—</span>}
-      </div>
-
-      {/* Col 4: Styles & Actions */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex-1">
-          <TagPills tags={person.tags} />
-        </div>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={() => setEditing(true)}
-            className="p-1.5 rounded hover:bg-blue-400/20 text-blue-400 transition-colors"
-            title="Edit"
-          >
-            <Pencil size={16} />
-          </button>
-          <button
-            onClick={remove}
-            className="p-1.5 rounded hover:bg-red-400/20 text-red-400 transition-colors"
-            title="Delete"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
 
-// ── Add person form (inline) ──────────────────────────────────────────────────
+// ── Add person form ───────────────────────────────────────────────────────────
 function AddPersonForm({
   allTags,
   onCreated,
+  onCancel,
 }: {
   allTags: Tag[];
   onCreated: () => void;
+  onCancel: () => void;
 }) {
   const [name, setName] = useState("");
   const [type, setType] = useState<PersonType>("dj");
@@ -309,44 +340,51 @@ function AddPersonForm({
   const [ra_url, setRaUrl] = useState("");
   const [bio, setBio] = useState("");
   const [tagIds, setTagIds] = useState<Set<number>>(new Set());
+  const [saving, setSaving] = useState(false);
 
-  const save = async () => {
-    if (!name.trim()) return;
-    const person = await createPerson({
-      name: name.trim(),
-      type,
-      city: city.trim() || null,
-      instagram: instagram.trim() || null,
-      ra_url: ra_url.trim() || null,
-      bio: bio.trim() || null,
+  const toggle = (id: number) =>
+    setTagIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
     });
-    await setPersonTags(person.id, Array.from(tagIds));
-    // Reset form
-    setName("");
-    setType("dj");
-    setCity("");
-    setInstagram("");
-    setRaUrl("");
-    setBio("");
-    setTagIds(new Set());
-    onCreated();
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      const person = await createPerson({
+        name: name.trim(),
+        type,
+        city: city.trim() || null,
+        instagram: instagram.trim() || null,
+        ra_url: ra_url.trim() || null,
+        bio: bio.trim() || null,
+      });
+      await setPersonTags(person.id, Array.from(tagIds));
+      onCreated();
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="space-y-3 p-3 bg-surface border border-rim rounded mb-3">
-      <div className="grid grid-cols-4 gap-3 items-center">
-        <div className="flex gap-2 items-center">
+    <form onSubmit={submit} className="border-b border-rim bg-elevated">
+      {/* Main row */}
+      <div className="flex items-center gap-3 px-4 py-3 text-sm">
+        <div className="w-40 shrink-0 space-y-1.5">
           <input
-            type="text"
+            autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Name"
-            className="flex-1 bg-elevated border border-rim rounded px-2 py-1 text-sm text-soft outline-none focus:border-muted"
+            placeholder="Person name"
+            className="w-full bg-transparent text-soft outline-none border-b border-sand/50 pb-px placeholder:text-faint"
           />
           <select
             value={type}
             onChange={(e) => setType(e.target.value as PersonType)}
-            className="bg-elevated border border-rim rounded px-2 py-1 text-xs text-soft outline-none focus:border-muted"
+            className="w-full bg-surface border border-rim rounded px-1.5 py-0.5 text-xs text-soft focus:outline-none focus:border-muted"
           >
             <option value="dj">DJ</option>
             <option value="musician">Musician</option>
@@ -355,78 +393,92 @@ function AddPersonForm({
             <option value="other">Other</option>
           </select>
         </div>
+
         <input
           type="text"
           value={city}
           onChange={(e) => setCity(e.target.value)}
-          placeholder="City"
-          className="bg-elevated border border-rim rounded px-2 py-1 text-sm text-soft outline-none focus:border-muted"
+          placeholder="City (optional)"
+          className="w-32 shrink-0 bg-transparent text-ghost outline-none border-b border-sand/30 pb-px placeholder:text-faint text-xs"
         />
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={instagram}
-            onChange={(e) => setInstagram(e.target.value)}
-            placeholder="Instagram handle"
-            className="flex-1 bg-elevated border border-rim rounded px-2 py-1 text-sm text-soft outline-none focus:border-muted text-xs"
-          />
-          <input
-            type="url"
-            value={ra_url}
-            onChange={(e) => setRaUrl(e.target.value)}
-            placeholder="RA URL"
-            className="flex-1 bg-elevated border border-rim rounded px-2 py-1 text-sm text-soft outline-none focus:border-muted text-xs"
-          />
-        </div>
-        <div className="flex gap-2 justify-end">
+
+        <div className="flex-1 min-w-0" />
+
+        <div className="w-48 shrink-0" />
+
+        <div className="flex gap-1 w-12 shrink-0 justify-end">
           <button
-            onClick={save}
-            className="px-3 py-1 rounded text-xs bg-sand/20 text-sand hover:bg-sand/30 transition-colors"
+            type="submit"
+            disabled={saving || !name.trim()}
+            className="p-1 text-live hover:text-live/80 disabled:opacity-40 transition-colors"
           >
-            Add
+            <Check size={13} />
+          </button>
+          <button type="button" onClick={onCancel} className="p-1 text-ghost hover:text-soft transition-colors">
+            <X size={13} />
           </button>
         </div>
       </div>
 
-      <div className="space-y-2 pl-3">
+      {/* Expanded section */}
+      <div className="px-4 pb-3 space-y-3">
+        {/* Social Links */}
         <div>
-          <label className="block text-xs text-ghost mb-1">Bio</label>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs text-ghost">Social</span>
+          </div>
+          <div className="space-y-1.5">
+            <input
+              type="text"
+              value={instagram}
+              onChange={(e) => setInstagram(e.target.value)}
+              placeholder="Instagram handle"
+              className="w-full px-2 py-1 rounded bg-surface border border-rim text-soft text-xs focus:outline-none focus:border-muted placeholder:text-faint"
+            />
+            <input
+              type="url"
+              value={ra_url}
+              onChange={(e) => setRaUrl(e.target.value)}
+              placeholder="Resident Advisor profile URL"
+              className="w-full px-2 py-1 rounded bg-surface border border-rim text-soft text-xs focus:outline-none focus:border-muted placeholder:text-faint"
+            />
+          </div>
+        </div>
+
+        {/* Bio */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs text-ghost">Bio</span>
+          </div>
           <textarea
             value={bio}
             onChange={(e) => setBio(e.target.value)}
             placeholder="Bio or notes (optional)"
             rows={2}
-            className="w-full bg-elevated border border-rim rounded px-2 py-1 text-sm text-soft outline-none focus:border-muted resize-none"
+            className="w-full px-2 py-1 rounded bg-surface border border-rim text-soft text-xs focus:outline-none focus:border-muted placeholder:text-faint resize-none"
           />
         </div>
-        <div>
-          <label className="block text-xs text-ghost mb-1">Styles</label>
-          <TagPicker
-            allTags={allTags}
-            selected={tagIds}
-            onToggle={(id) => {
-              const newSet = new Set(tagIds);
-              if (newSet.has(id)) newSet.delete(id);
-              else newSet.add(id);
-              setTagIds(newSet);
-            }}
-          />
-        </div>
+
+        {/* Tags */}
+        {allTags.length > 0 && (
+          <div>
+            <TagPicker allTags={allTags} selected={tagIds} onToggle={toggle} />
+          </div>
+        )}
       </div>
-    </div>
+    </form>
   );
 }
 
-// ── Main People page ──────────────────────────────────────────────────────────
-
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default function People() {
   const [people, setPeople] = useState<PersonWithTags[]>([]);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
-  const [filterType, setFilterType] = useState<'all' | PersonType>('all');
 
   const load = async () => {
+    setLoading(true);
     try {
       const [p, t] = await Promise.all([getPeople(), getTags()]);
       setPeople(p);
@@ -436,115 +488,79 @@ export default function People() {
     }
   };
 
-  useEffect(() => {
-    load();
-  }, []);
-
-  const filtered = filterType === 'all'
-    ? people
-    : people.filter(p => p.type === filterType);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-soft">Loading people…</div>
-      </div>
-    );
-  }
-
-  const types: PersonType[] = ['dj', 'musician', 'promoter', 'raver', 'other'];
+  useEffect(() => { load(); }, []);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="max-w-3xl mx-auto px-8 py-16">
       {/* Header */}
-      <div className="px-4 py-4 border-b border-rim">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Users size={20} className="text-sand" />
-            <h1 className="text-lg font-semibold text-soft">People</h1>
-          </div>
-          <button
-            onClick={() => setAdding(!adding)}
-            className="p-2 rounded hover:bg-sand/20 text-sand transition-colors"
-            title="Add person"
-          >
-            <Plus size={18} />
-          </button>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-xl font-semibold text-soft tracking-tight mb-1">People</h1>
+          <p className="text-ghost text-sm">DJs, musicians, promoters, and ravers in your network.</p>
         </div>
-
-        {/* Type filter */}
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => setFilterType('all')}
-            className={clsx(
-              "px-3 py-1 rounded text-xs border transition-colors",
-              filterType === 'all'
-                ? "border-sand/50 bg-sand/10 text-sand"
-                : "border-rim text-ghost hover:text-soft"
-            )}
-          >
-            All
-          </button>
-          {types.map((t) => (
-            <button
-              key={t}
-              onClick={() => setFilterType(t)}
-              className={clsx(
-                "px-3 py-1 rounded text-xs border transition-colors",
-                filterType === t
-                  ? "border-sand/50 bg-sand/10 text-sand"
-                  : "border-rim text-ghost hover:text-soft"
-              )}
-            >
-              {t.charAt(0).toUpperCase() + t.slice(1)}
-            </button>
-          ))}
-        </div>
+        <button
+          onClick={() => setAdding(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-rim text-ghost text-xs hover:text-soft hover:border-muted transition-colors"
+        >
+          <Plus size={13} />
+          Add person
+        </button>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Table */}
+      <div className="rounded-lg border border-rim overflow-hidden">
+        {/* Column headers */}
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-surface border-b border-rim text-xs text-faint uppercase tracking-wider">
+          <span className="w-40 shrink-0">Name & Type</span>
+          <span className="w-32 shrink-0">City</span>
+          <span className="flex-1">Social</span>
+          <span className="w-48 shrink-0">Styles</span>
+          <span className="w-12 shrink-0" />
+        </div>
+
+        {/* Add form */}
         {adding && (
-          <div className="p-4 border-b border-rim">
-            <AddPersonForm
-              allTags={allTags}
-              onCreated={() => {
-                setAdding(false);
-                load();
-              }}
-            />
-          </div>
+          <AddPersonForm
+            allTags={allTags}
+            onCreated={() => { setAdding(false); load(); }}
+            onCancel={() => setAdding(false)}
+          />
         )}
 
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <Users size={48} className="text-faint mb-3" />
-            <p className="text-soft mb-1">No people yet</p>
-            <p className="text-ghost text-sm">Add a DJ, promoter, or raver to get started</p>
+        {/* Rows */}
+        {loading ? (
+          <div className="px-4 py-10 text-center text-ghost text-sm">Loading…</div>
+        ) : people.length === 0 && !adding ? (
+          <div className="px-4 py-12 text-center">
+            <Users size={28} className="text-faint mx-auto mb-3" strokeWidth={1} />
+            <p className="text-ghost text-sm mb-1">No people yet.</p>
+            <p className="text-faint text-xs mb-4">Add a DJ, musician, promoter, or raver to your network.</p>
+            <button
+              onClick={() => setAdding(true)}
+              className="px-3 py-1.5 rounded border border-rim text-ghost text-xs hover:text-soft hover:border-muted transition-colors"
+            >
+              <Plus size={12} className="inline mr-1" />
+              Add person
+            </button>
           </div>
         ) : (
-          <div>
-            {/* Column headers */}
-            <div className="grid grid-cols-4 gap-3 p-3 bg-surface border-b border-rim sticky top-0 text-xs font-medium text-ghost">
-              <div>Name & Type</div>
-              <div>City</div>
-              <div>Social</div>
-              <div>Styles</div>
-            </div>
-
-            {/* Rows */}
-            {filtered.map((person) => (
-              <PersonRow
-                key={person.id}
-                person={person}
-                allTags={allTags}
-                onUpdated={load}
-                onDeleted={load}
-              />
-            ))}
-          </div>
+          people.map((p) => (
+            <PersonRow
+              key={p.id}
+              person={p}
+              allTags={allTags}
+              onUpdated={load}
+              onDeleted={load}
+            />
+          ))
         )}
       </div>
+
+      {people.length > 0 && (
+        <p className="mt-4 text-xs text-faint">
+          {people.length} person{people.length !== 1 ? "s" : ""} total
+        </p>
+      )}
     </div>
   );
 }
