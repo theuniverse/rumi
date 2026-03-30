@@ -256,12 +256,8 @@ export default function LiveAnalyzer() {
     if (!recordingId) return;
     setIsSaving(true);
     try {
-      let sessionId: number | null = null;
-      if (selectedPlaceId) {
-        const session = await createSession({ venue_id: selectedPlaceId });
-        sessionId = session.id;
-        await updateRecordingSession(recordingId, sessionId);
-      }
+      const session = await createSession({ venue_id: selectedPlaceId ?? null });
+      await updateRecordingSession(recordingId, session.id);
       if (selectedTags.size > 0) {
         await addRecordingTags(recordingId, [...selectedTags]);
       }
