@@ -37,7 +37,7 @@ services:
     environment:
       DATABASE_URL: mysql://root:${WEWE_DB_PASSWORD:-wewe_rss_pass}@wewe-rss-db:3306/wewe_rss
       AUTH_CODE: ${WEWE_AUTH_CODE:-changeme_wewe}
-      SERVER_ORIGIN_URL: http://wewe-rss:4000
+      SERVER_ORIGIN_URL: ${WEWE_SERVER_ORIGIN_URL:-https://rumi.website/wewerss}
       MAX_ITEMS_PER_FEED: "20"
       CRON_EXPRESSION: "35 5,17 * * *"
       ENABLE_FEED_AUTH: "false"

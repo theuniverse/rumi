@@ -3,8 +3,11 @@ backend/.venv/
 backend/**/__pycache__/
 backend/**/*.pyc
 
-# Secrets
+# Environment files (secrets)
+.env
 backend/.env
+scraper/.env
+frontend/.env
 
 # Node / Frontend
 frontend/node_modules/
