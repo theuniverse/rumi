@@ -48,6 +48,12 @@ services:
     depends_on:
       wewe-rss-db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:4000 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
   # ── Event Scraper (FastAPI + SQLite + APScheduler) ─────────────────────────
   scraper:
@@ -63,13 +69,14 @@ services:
     networks:
       - rumi_internal
     depends_on:
-      - wewe-rss
+      wewe-rss:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
-      interval: 30s
+      interval: 20s
       timeout: 5s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 40s
 
   # ── Backend (FastAPI) ──────────────────────────────────────────────────────
   backend:
@@ -89,7 +96,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 90s
+      start_period: 60s
 
   # ── Frontend (nginx + React SPA) ──────────────────────────────────────────
   frontend:
@@ -107,6 +114,14 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+      scraper:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
 volumes:
   rumi_storage:
