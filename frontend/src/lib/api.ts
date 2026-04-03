@@ -7,7 +7,7 @@
  */
 
 // Re-export types so pages can still do: import { Tag } from "../lib/api"
-export type { Tag, Place, PlaceType, Person, PersonType, Venue, Session, Recording, AnalysisSnapshot } from "./types";
+export type { Tag, Place, PlaceType, Person, PersonType, Venue, Label, LabelType, Session, Recording, AnalysisSnapshot, RumiEvent, EventLineupEntry, EventStatus, RAEventRaw } from "./types";
 
 // Re-export all DB functions under the same names pages were already using
 export {
@@ -34,6 +34,29 @@ export {
   updatePerson,
   deletePerson,
   setPersonTags,
+  setPersonFollowed,
+  // Labels
+  getLabels,
+  createLabel,
+  updateLabel,
+  deleteLabel,
+  setLabelTags,
+  setLabelFollowed,
+  // Follow
+  setVenueFollowed,
+  getFollowedEntities,
+  // Events
+  getEvents,
+  saveEvent,
+  updateEventStatus,
+  deleteEvent,
+  getEventLineup,
+  setEventLineup,
+  // Session attribution
+  linkSessionEvent,
+  setRecordingPeople,
+  getRecordingPeople,
+  findOrCreatePersonFromLineup,
   startRecording,
   stopRecording,
   getRecentRecordings,

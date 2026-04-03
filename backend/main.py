@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 
-from routers import analyze
+from routers import analyze, ra
 
 app = FastAPI(title="Rumi API", version="0.2.0")
 
@@ -26,6 +26,7 @@ app.add_middleware(
 )
 
 app.include_router(analyze.router)
+app.include_router(ra.router)
 
 
 @app.get("/health")

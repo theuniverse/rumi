@@ -1,4 +1,4 @@
-import { Radio, Tag, Calendar, MapPin } from "lucide-react";
+import { Radio, Tag, Calendar, MapPin, Users, Disc3, CalendarDays } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const CARDS = [
@@ -22,6 +22,27 @@ const CARDS = [
     title: "Places",
     desc: "Manage clubs, venues, and personal spaces.",
     accent: "text-ghost",
+  },
+  {
+    to: "/people",
+    icon: Users,
+    title: "People",
+    desc: "DJs, musicians, promoters, and ravers in your network.",
+    accent: "text-soft",
+  },
+  {
+    to: "/labels",
+    icon: Disc3,
+    title: "Labels",
+    desc: "Promoters and record labels. Follow to track RA events.",
+    accent: "text-amber-500",
+  },
+  {
+    to: "/events",
+    icon: CalendarDays,
+    title: "Events",
+    desc: "Upcoming events from followed venues, artists, and labels.",
+    accent: "text-blue-400",
   },
   {
     to: "/styles",

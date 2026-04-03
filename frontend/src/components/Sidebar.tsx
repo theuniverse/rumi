@@ -1,16 +1,28 @@
 import { NavLink } from "react-router-dom";
-import { Activity, Tag, LayoutDashboard, Calendar, MapPin, Users, Settings, RefreshCw } from "lucide-react";
+import { Radio, Tag, LayoutDashboard, Calendar, MapPin, Users, Settings, RefreshCw, Disc3, CalendarDays, Rss, Globe, Sparkles, FileText, SlidersHorizontal, Database, Lightbulb } from "lucide-react";
 import clsx from "clsx";
 import { useVersionCheck } from "../hooks/useVersionCheck";
 
 const NAV = [
   { to: "/",          icon: LayoutDashboard, label: "Home"      },
-  { to: "/analyze",   icon: Activity,        label: "Analyze"   },
+  { to: "/analyze",   icon: Radio,           label: "Analyze"   },
   { to: "/sessions",  icon: Calendar,        label: "Sessions"  },
+  { to: "/labels",    icon: Disc3,           label: "Labels"    },
+  { to: "/events",    icon: CalendarDays,    label: "Events"    },
   { to: "/places",    icon: MapPin,          label: "Places"    },
   { to: "/people",    icon: Users,           label: "People"    },
   { to: "/styles",    icon: Tag,             label: "Styles"    },
   { to: "/settings",  icon: Settings,        label: "Settings"  },
+];
+
+const SCRAPER_NAV = [
+  { to: "/scraper",              icon: Rss,               label: "Scraper"      },
+  { to: "/scraper/sources",      icon: Globe,             label: "Sources"      },
+  { to: "/scraper/events",       icon: Sparkles,          label: "Events"       },
+  { to: "/scraper/pages",        icon: FileText,          label: "Pages"        },
+  { to: "/scraper/refdata",      icon: Database,          label: "Ref Data"     },
+  { to: "/scraper/discoveries",  icon: Lightbulb,         label: "Discoveries"  },
+  { to: "/scraper/settings",     icon: SlidersHorizontal, label: "Settings"     },
 ];
 
 interface SidebarProps {
@@ -58,6 +70,30 @@ export default function Sidebar({ isOpen = true, onClose, isMobile = false }: Si
             key={to}
             to={to}
             end={to === "/"}
+            onClick={handleNavClick}
+            className={({ isActive }) =>
+              clsx(
+                "flex items-center gap-3 px-3 py-2 rounded text-sm transition-colors touch-manipulation min-h-[44px]",
+                isActive
+                  ? "text-soft bg-elevated"
+                  : "text-ghost hover:text-soft hover:bg-elevated/60"
+              )
+            }
+          >
+            <Icon size={15} strokeWidth={1.5} />
+            <span>{label}</span>
+          </NavLink>
+        ))}
+
+        {/* Scraper section */}
+        <div className="pt-3 pb-1 px-3">
+          <span className="text-faint text-[10px] uppercase tracking-widest">Scraper</span>
+        </div>
+        {SCRAPER_NAV.map(({ to, icon: Icon, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={to === "/scraper"}
             onClick={handleNavClick}
             className={({ isActive }) =>
               clsx(

@@ -1,22 +1,28 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Calendar, Clock, MapPin, Music, Disc, Trash2, ChevronDown, Play } from "lucide-react";
+import { Calendar, Clock, MapPin, Music, Disc, Trash2, ChevronDown, Play, Link2, User, X } from "lucide-react";
 import {
-  Session, Recording, Tag,
+  Session, Recording, Tag, RumiEvent, EventLineupEntry, Person,
   getSessions, getRecordingsForSession, getTagsForRecording,
   deleteSession, deleteRecording,
+  getEvents, linkSessionEvent,
+  getEventLineup, getPeople,
+  setRecordingPeople, getRecordingPeople, findOrCreatePersonFromLineup,
 } from "../lib/api";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { useAudioPlayer } from "../contexts/AudioPlayerContext";
 import { recordingTitle, recordingMeta } from "../lib/recordingFormat";
 
-interface RecordingWithTags extends Recording { tags: Tag[] }
-interface SessionWithRecordings extends Session { recordings: RecordingWithTags[] }
+interface RecordingWithTags extends Recording {
+  tags: Tag[];
+  djs?: Person[];
+}
+interface SessionWithRecordings extends Session {
+  recordings: RecordingWithTags[];
+}
 
 // ── DJ-day helpers ─────────────────────────────────────────────────────────────
-// "DJ day" = 06:00 today → 05:59 tomorrow (all in local time)
 function getDJDay(iso: string): string {
   const d = new Date(iso.replace(" ", "T") + "Z");
-  // If local hour is before 6 AM, it belongs to the previous calendar day
   if (d.getHours() < 6) d.setDate(d.getDate() - 1);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -25,13 +31,12 @@ function getDJDay(iso: string): string {
 }
 
 function formatDJDay(dayStr: string): string {
-  const d = new Date(dayStr + "T12:00:00"); // noon avoids DST edge cases
+  const d = new Date(dayStr + "T12:00:00");
   const weekday = d.toLocaleDateString("en-US", { weekday: "short" });
   const [y, m, day] = dayStr.split("-");
   return `${y}/${m}/${day}, ${weekday}`;
 }
 
-/** Returns true if the session time is in the 00:00–05:59 window (past midnight) */
 function isPastMidnight(iso: string): boolean {
   const h = new Date(iso.replace(" ", "T") + "Z").getHours();
   return h < 6;
@@ -75,6 +80,174 @@ function TagPills({ tags }: { tags: Tag[] }) {
   );
 }
 
+// ── Event link picker ─────────────────────────────────────────────────────────
+
+function EventLinkPicker({ sessionId, currentEventId, currentEventTitle, allEvents, onLinked }: {
+  sessionId: number;
+  currentEventId: number | null;
+  currentEventTitle?: string | null;
+  allEvents: RumiEvent[];
+  onLinked: (eventId: number | null, eventTitle: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const link = async (eventId: number | null) => {
+    await linkSessionEvent(sessionId, eventId);
+    const ev = allEvents.find(e => e.id === eventId);
+    onLinked(eventId, ev?.title ?? null);
+    setOpen(false);
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-1 text-xs text-faint hover:text-ghost transition-colors"
+        title="Link to event"
+      >
+        <Link2 size={11} />
+        {currentEventTitle
+          ? <span className="text-ghost">{currentEventTitle}</span>
+          : <span>Link event</span>
+        }
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <select
+        autoFocus
+        defaultValue={currentEventId ?? ""}
+        onChange={(e) => link(e.target.value ? parseInt(e.target.value) : null)}
+        className="appearance-none pl-2 pr-6 py-0.5 rounded bg-surface border border-muted text-ghost text-xs focus:outline-none cursor-pointer"
+      >
+        <option value="">— no event —</option>
+        {allEvents.map(ev => (
+          <option key={ev.id} value={ev.id}>
+            {ev.date.slice(5)} · {ev.title}{ev.venue_name ? ` @ ${ev.venue_name}` : ""}
+          </option>
+        ))}
+      </select>
+      <button onClick={() => setOpen(false)} className="text-faint hover:text-ghost">
+        <X size={11} />
+      </button>
+    </div>
+  );
+}
+
+// ── DJ attribution picker ─────────────────────────────────────────────────────
+
+function DJPicker({ recordingId, djs, eventId, allPeople, onChanged }: {
+  recordingId: number;
+  djs: Person[];
+  eventId: number | null;
+  allPeople: Person[];
+  onChanged: (djs: Person[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [lineup, setLineup] = useState<EventLineupEntry[]>([]);
+
+  useEffect(() => {
+    if (open && eventId) {
+      getEventLineup(eventId).then(setLineup);
+    } else {
+      setLineup([]);
+    }
+  }, [open, eventId]);
+
+  const addFromLineup = async (entry: EventLineupEntry) => {
+    const person = await findOrCreatePersonFromLineup(entry.person_name);
+    const current = await getRecordingPeople(recordingId);
+    if (current.some(p => p.id === person.id)) return;
+    await setRecordingPeople(recordingId, [...current.map(p => p.id), person.id]);
+    onChanged([...current, person]);
+  };
+
+  const addFromPeople = async (personId: number) => {
+    const current = await getRecordingPeople(recordingId);
+    if (current.some(p => p.id === personId)) return;
+    const person = allPeople.find(p => p.id === personId);
+    if (!person) return;
+    await setRecordingPeople(recordingId, [...current.map(p => p.id), person.id]);
+    onChanged([...current, person]);
+  };
+
+  const remove = async (personId: number) => {
+    const current = await getRecordingPeople(recordingId);
+    const next = current.filter(p => p.id !== personId);
+    await setRecordingPeople(recordingId, next.map(p => p.id));
+    onChanged(next);
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-1 mt-1.5">
+      {djs.map(p => (
+        <span
+          key={p.id}
+          className="group/dj flex items-center gap-1 text-[10px] border border-soft/20 text-soft rounded px-1.5 py-0.5"
+        >
+          <User size={9} className="text-faint" />
+          {p.name}
+          <button
+            onClick={() => remove(p.id)}
+            className="text-faint hover:text-red-400 transition-colors opacity-0 group-hover/dj:opacity-100"
+          >
+            <X size={9} />
+          </button>
+        </span>
+      ))}
+
+      {!open && (
+        <button
+          onClick={() => setOpen(true)}
+          className="text-[10px] text-faint hover:text-ghost border border-dashed border-rim rounded px-1.5 py-0.5 transition-colors"
+        >
+          + DJ
+        </button>
+      )}
+
+      {open && (
+        <div className="flex items-center gap-1">
+          <select
+            autoFocus
+            defaultValue=""
+            onChange={async (e) => {
+              const val = e.target.value;
+              if (!val) return;
+              if (val.startsWith("lineup:")) {
+                const idx = parseInt(val.slice(7));
+                await addFromLineup(lineup[idx]);
+              } else {
+                await addFromPeople(parseInt(val));
+              }
+              setOpen(false);
+            }}
+            className="appearance-none pl-2 pr-6 py-0.5 rounded bg-surface border border-muted text-ghost text-xs focus:outline-none cursor-pointer"
+          >
+            <option value="">— pick DJ —</option>
+            {lineup.length > 0 && (
+              <optgroup label="From lineup">
+                {lineup.map((entry, i) => (
+                  <option key={entry.id} value={`lineup:${i}`}>{entry.person_name}</option>
+                ))}
+              </optgroup>
+            )}
+            <optgroup label="All people">
+              {allPeople.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </optgroup>
+          </select>
+          <button onClick={() => setOpen(false)} className="text-faint hover:text-ghost">
+            <X size={11} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Filter select ──────────────────────────────────────────────────────────────
 function FilterSelect({
   label, value, onChange, children,
@@ -112,15 +285,29 @@ export default function Sessions() {
   >(null);
   const { playTrack } = useAudioPlayer();
 
+  // For attribution
+  const [allEvents, setAllEvents] = useState<RumiEvent[]>([]);
+  const [allPeople, setAllPeople] = useState<Person[]>([]);
+
   const loadSessions = useCallback(async () => {
     setLoading(true);
     try {
-      const raw = await getSessions();
+      const [raw, events, people] = await Promise.all([
+        getSessions(),
+        getEvents(),
+        getPeople(),
+      ]);
+      setAllEvents(events);
+      setAllPeople(people);
       const enriched = await Promise.all(
         raw.map(async (s) => {
           const recs = await getRecordingsForSession(s.id);
           const recordings = await Promise.all(
-            recs.map(async (r) => ({ ...r, tags: await getTagsForRecording(r.id) }))
+            recs.map(async (r) => ({
+              ...r,
+              tags: await getTagsForRecording(r.id),
+              djs: await getRecordingPeople(r.id),
+            }))
           );
           return { ...s, recordings };
         })
@@ -136,7 +323,7 @@ export default function Sessions() {
   // ── Filter options derived from full dataset ───────────────────────────────
   const allDJDays = useMemo(() => {
     const days = [...new Set(sessions.map((s) => getDJDay(s.started_at)))];
-    return days.sort().reverse(); // newest first
+    return days.sort().reverse();
   }, [sessions]);
 
   const allVenues = useMemo(() => {
@@ -144,7 +331,7 @@ export default function Sessions() {
     sessions.forEach((s) => {
       if (s.venue_id != null && s.venue_name) map.set(String(s.venue_id), s.venue_name);
     });
-    return [...map.entries()]; // [id, name]
+    return [...map.entries()];
   }, [sessions]);
 
   // ── Filtered + grouped ────────────────────────────────────────────────────
@@ -166,6 +353,24 @@ export default function Sessions() {
       .sort(([a], [b]) => b.localeCompare(a))
       .map(([day, daysSessions]) => ({ day, sessions: daysSessions }));
   }, [sessions, selectedDay, selectedVenueId]);
+
+  // ── Session event linking ──────────────────────────────────────────────────
+  const handleEventLinked = (sessionId: number, eventId: number | null, eventTitle: string | null) => {
+    setSessions(prev => prev.map(s =>
+      s.id === sessionId
+        ? { ...s, event_id: eventId, event_title: eventTitle }
+        : s
+    ));
+  };
+
+  // ── Recording DJ update ────────────────────────────────────────────────────
+  const handleDJsChanged = (sessionId: number, recordingId: number, djs: Person[]) => {
+    setSessions(prev => prev.map(s =>
+      s.id === sessionId
+        ? { ...s, recordings: s.recordings.map(r => r.id === recordingId ? { ...r, djs } : r) }
+        : s
+    ));
+  };
 
   // ── Delete handler ────────────────────────────────────────────────────────
   const handleConfirmDelete = async () => {
@@ -216,12 +421,10 @@ export default function Sessions() {
         </div>
       )}
 
-      {/* Loading */}
       {loading && (
         <p className="text-ghost text-sm text-center py-24">Loading…</p>
       )}
 
-      {/* Empty */}
       {!loading && sessions.length === 0 && (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <Calendar size={32} strokeWidth={1} className="text-faint mb-4" />
@@ -230,7 +433,6 @@ export default function Sessions() {
         </div>
       )}
 
-      {/* No results after filter */}
       {!loading && sessions.length > 0 && groups.length === 0 && (
         <p className="text-ghost text-sm text-center py-16">No sessions match the current filters.</p>
       )}
@@ -238,7 +440,6 @@ export default function Sessions() {
       {/* Grouped sessions */}
       {!loading && groups.map(({ day, sessions: daySessions }) => (
         <div key={day} className="mb-10">
-          {/* Day header */}
           <div className="flex items-center gap-3 mb-3">
             <span className="text-xs font-medium text-ghost tracking-wide">
               {formatDJDay(day)}
@@ -249,14 +450,13 @@ export default function Sessions() {
             </span>
           </div>
 
-          {/* Session cards */}
           <div className="space-y-3">
             {daySessions.map((s) => {
               const nextDay = isPastMidnight(s.started_at);
               return (
                 <div key={s.id} className="rounded-lg border border-rim overflow-hidden">
-                  {/* Session header (no date — shown in group header) */}
-                  <div className="flex items-center gap-3 px-4 py-3 bg-surface border-b border-rim">
+                  {/* Session header */}
+                  <div className="flex items-center gap-3 px-4 py-3 bg-surface border-b border-rim flex-wrap">
                     <Clock size={13} className="text-faint shrink-0" />
                     <span className="text-soft text-sm font-medium font-mono">
                       {formatTime(s.started_at)}
@@ -275,6 +475,15 @@ export default function Sessions() {
                         </span>
                       </>
                     )}
+                    {/* Event link */}
+                    <span className="text-faint text-xs">·</span>
+                    <EventLinkPicker
+                      sessionId={s.id}
+                      currentEventId={(s as Session & { event_id?: number | null }).event_id ?? null}
+                      currentEventTitle={(s as Session & { event_title?: string | null }).event_title}
+                      allEvents={allEvents}
+                      onLinked={(eid, etitle) => handleEventLinked(s.id, eid, etitle)}
+                    />
                     <div className="flex-1" />
                     <span className="text-faint text-xs">
                       {s.recordings.length} rec{s.recordings.length !== 1 ? "s" : ""}
@@ -321,6 +530,16 @@ export default function Sessions() {
                             <Trash2 size={12} />
                           </button>
                         </div>
+
+                        {/* DJ attribution */}
+                        <DJPicker
+                          recordingId={r.id}
+                          djs={r.djs ?? []}
+                          eventId={(s as Session & { event_id?: number | null }).event_id ?? null}
+                          allPeople={allPeople}
+                          onChanged={(djs) => handleDJsChanged(s.id, r.id, djs)}
+                        />
+
                         {r.audio_url && (
                           <button
                             onClick={() => playTrack(

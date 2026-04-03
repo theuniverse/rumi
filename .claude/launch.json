@@ -11,9 +11,10 @@
     {
       "name": "rumi-frontend",
       "runtimeExecutable": "/bin/zsh",
-      "runtimeArgs": ["-c", "source ~/.nvm/nvm.sh && cd frontend && npm run dev"],
+      "runtimeArgs": ["-c", "source ~/.nvm/nvm.sh && cd frontend && npm run dev -- --port $PORT"],
       "cwd": "/Users/xiqish/Documents/GitHub/personal/rumi",
-      "port": 5173
+      "port": 5173,
+      "autoPort": true
     }
     ,{
       "name": "rumi-static",

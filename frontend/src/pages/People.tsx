@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Pencil, Trash2, Check, X, Users, Instagram, ExternalLink } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, Users, Instagram, ExternalLink, Star } from "lucide-react";
 import clsx from "clsx";
-import { Tag, Person, PersonType, getTags, getPeople, createPerson, updatePerson, deletePerson, setPersonTags } from "../lib/api";
+import { Tag, Person, PersonType, getTags, getPeople, createPerson, updatePerson, deletePerson, setPersonTags, setPersonFollowed } from "../lib/api";
 
 type PersonWithTags = Person & { tags: Tag[] };
 
@@ -108,6 +108,7 @@ function PersonRow({
   const [ra_url, setRaUrl] = useState(person.ra_url ?? "");
   const [bio, setBio] = useState(person.bio ?? "");
   const [tagIds, setTagIds] = useState<Set<number>>(new Set(person.tags.map((t) => t.id)));
+  const [followed, setFollowed] = useState((person as Person & { followed?: number }).followed === 1);
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -151,6 +152,12 @@ function PersonRow({
     if (!confirm(`Delete "${person.name}"?`)) return;
     await deletePerson(person.id);
     onDeleted();
+  };
+
+  const toggleFollow = async () => {
+    const next = !followed;
+    setFollowed(next);
+    await setPersonFollowed(person.id, next);
   };
 
   return (
@@ -242,10 +249,26 @@ function PersonRow({
           {!editing && <TagPills tags={person.tags} />}
         </div>
 
+        {/* Follow */}
+        <div className="w-8 shrink-0 flex justify-center">
+          {!editing && (
+            <button
+              onClick={toggleFollow}
+              title={followed ? "Unfollow" : "Follow (fetch RA events)"}
+              className={clsx(
+                "p-1 transition-colors",
+                followed ? "text-amber-400 hover:text-amber-300" : "text-faint hover:text-ghost opacity-0 group-hover:opacity-100"
+              )}
+            >
+              <Star size={13} fill={followed ? "currentColor" : "none"} />
+            </button>
+          )}
+        </div>
+
         {/* Actions */}
         <div
           className={clsx(
-            "flex items-center gap-1 w-12 shrink-0 justify-end",
+            "flex items-center gap-1 w-10 shrink-0 justify-end",
             editing ? "visible" : "invisible group-hover:visible"
           )}
         >
@@ -515,7 +538,8 @@ export default function People() {
           <span className="w-32 shrink-0">City</span>
           <span className="flex-1">Social</span>
           <span className="w-48 shrink-0">Styles</span>
-          <span className="w-12 shrink-0" />
+          <span className="w-8 shrink-0 text-center">RA</span>
+          <span className="w-10 shrink-0" />
         </div>
 
         {/* Add form */}

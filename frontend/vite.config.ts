@@ -129,6 +129,15 @@ export default defineConfig({
         ws: true,
         rewrite: (path) => path.replace(/^\/rumi/, ""),
       },
+      // Scraper service (with and without base prefix)
+      "/rumi/scraper-api": {
+        target: "http://localhost:9000",
+        rewrite: (path) => path.replace(/^\/rumi\/scraper-api/, "/api"),
+      },
+      "/scraper-api": {
+        target: "http://localhost:9000",
+        rewrite: (path) => path.replace(/^\/scraper-api/, "/api"),
+      },
       // Direct (no base prefix) fallback
       "/api": "http://localhost:8000",
       "/storage": "http://localhost:8000",

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Pencil, Trash2, Check, X, MapPin, Calendar, Navigation } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, MapPin, Calendar, Navigation, Star } from "lucide-react";
 import clsx from "clsx";
-import { Tag, Place, PlaceType, getTags, getPlaces, createPlace, updatePlace, deletePlace, setPlaceTags } from "../lib/api";
+import { Tag, Place, PlaceType, getTags, getPlaces, createPlace, updatePlace, deletePlace, setPlaceTags, setVenueFollowed } from "../lib/api";
 import { getCurrentLocation } from "../lib/location";
 
 type PlaceWithCount = Place & { session_count: number; tags: Tag[] };
@@ -105,6 +105,7 @@ function PlaceRow({
   const [address, setAddress] = useState(place.address ?? "");
   const [latitude, setLatitude] = useState<string>(place.latitude?.toString() ?? "");
   const [longitude, setLongitude] = useState<string>(place.longitude?.toString() ?? "");
+  const [followed, setFollowed] = useState((place as Place & { followed?: number }).followed === 1);
   const [tagIds, setTagIds]   = useState<Set<number>>(new Set(place.tags.map((t) => t.id)));
   const [gettingLocation, setGettingLocation] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -165,6 +166,12 @@ function PlaceRow({
     if (!confirm(msg)) return;
     await deletePlace(place.id);
     onDeleted();
+  };
+
+  const toggleFollow = async () => {
+    const next = !followed;
+    setFollowed(next);
+    await setVenueFollowed(place.id, next);
   };
 
   return (
@@ -235,10 +242,26 @@ function PlaceRow({
           )}
         </div>
 
+        {/* Follow */}
+        <div className="w-8 shrink-0 flex justify-center">
+          {!editing && (
+            <button
+              onClick={toggleFollow}
+              title={followed ? "Unfollow" : "Follow (fetch RA events)"}
+              className={clsx(
+                "p-1 transition-colors",
+                followed ? "text-amber-400 hover:text-amber-300" : "text-faint hover:text-ghost opacity-0 group-hover:opacity-100"
+              )}
+            >
+              <Star size={13} fill={followed ? "currentColor" : "none"} />
+            </button>
+          )}
+        </div>
+
         {/* Actions */}
         <div
           className={clsx(
-            "flex items-center gap-1 w-12 shrink-0 justify-end",
+            "flex items-center gap-1 w-10 shrink-0 justify-end",
             editing ? "visible" : "invisible group-hover:visible"
           )}
         >
@@ -521,7 +544,8 @@ export default function Places() {
           <span className="flex-1">Address</span>
           <span className="w-48 shrink-0">Styles</span>
           <span className="w-14 shrink-0 text-right">Sessions</span>
-          <span className="w-12 shrink-0" />
+          <span className="w-8 shrink-0 text-center">RA</span>
+          <span className="w-10 shrink-0" />
         </div>
 
         {/* Add form */}

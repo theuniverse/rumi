@@ -1,7 +1,9 @@
 import { useState, useRef } from "react";
-import { Check, X, Download, Upload, Trash2, Scissors } from "lucide-react";
+import { Check, X, Download, Upload, Trash2, Scissors, RefreshCw } from "lucide-react";
 import clsx from "clsx";
 import { getStoredWebhook, setStoredWebhook, postToFlomo } from "../lib/flomo";
+import { forceRefreshRAEvents } from "../lib/ra";
+import { forceImportScraperEvents } from "../lib/scraper-sync";
 import {
   exportSelectedData, importData as dbImportData, getDataCounts,
   clearAllData, pruneSnapshots,
@@ -10,12 +12,14 @@ import type { ExportableType, ExportData, ImportResult } from "../lib/types";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const EXPORTABLE_TYPES: ExportableType[] = ['tags', 'venues', 'people', 'sessions', 'recordings', 'snapshots'];
+const EXPORTABLE_TYPES: ExportableType[] = ['tags', 'venues', 'people', 'labels', 'events', 'sessions', 'recordings', 'snapshots'];
 
 const TYPE_LABELS: Record<ExportableType, string> = {
   tags:       'Styles',
   venues:     'Places',
   people:     'People',
+  labels:     'Labels',
+  events:     'Events',
   sessions:   'Sessions',
   recordings: 'Recordings',
   snapshots:  'Analysis Snapshots',
@@ -25,7 +29,8 @@ function getSample(items: unknown[] | undefined, type: ExportableType): string {
   if (!items || items.length === 0) return '';
   const sample = items.slice(0, 3).map((item) => {
     const r = item as Record<string, unknown>;
-    if (type === 'tags' || type === 'venues' || type === 'people') return String(r.name ?? '');
+    if (type === 'tags' || type === 'venues' || type === 'people' || type === 'labels') return String(r.name ?? '');
+    if (type === 'events') return String(r.title ?? '');
     return String(r.started_at ?? r.captured_at ?? '').slice(0, 10);
   });
   return sample.join(', ') + (items.length > 3 ? '…' : '');
@@ -207,6 +212,32 @@ function DataSection() {
     setImportResult(null);
     setImportParseError(null);
     setPanel('none');
+  };
+
+  // ── RA refresh ──────────────────────────────────────────────────────────
+  const [raRefreshing, setRaRefreshing] = useState(false);
+  const [raRefreshResult, setRaRefreshResult] = useState<number | null>(null);
+
+  const refreshRA = async () => {
+    setRaRefreshing(true);
+    setRaRefreshResult(null);
+    const count = await forceRefreshRAEvents();
+    setRaRefreshing(false);
+    setRaRefreshResult(count);
+    setTimeout(() => setRaRefreshResult(null), 4000);
+  };
+
+  // ── Scraper import ──────────────────────────────────────────────────────
+  const [scraperImporting, setScraperImporting] = useState(false);
+  const [scraperImportResult, setScraperImportResult] = useState<number | null>(null);
+
+  const importScraperEvents = async () => {
+    setScraperImporting(true);
+    setScraperImportResult(null);
+    const count = await forceImportScraperEvents();
+    setScraperImporting(false);
+    setScraperImportResult(count);
+    setTimeout(() => setScraperImportResult(null), 4000);
   };
 
   // ── Prune / clear handlers ───────────────────────────────────────────────
@@ -397,6 +428,36 @@ function DataSection() {
           </button>
         </div>
       )}
+
+      {/* ── RA refresh ───────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={refreshRA}
+          disabled={raRefreshing}
+          className="flex items-center gap-2 px-3 py-2 rounded border border-rim text-ghost hover:text-soft hover:border-muted text-xs transition-colors disabled:opacity-40"
+        >
+          <RefreshCw size={13} className={raRefreshing ? "animate-spin" : ""} />
+          {raRefreshing ? "Fetching RA events…" : "Refresh RA Events"}
+        </button>
+        {raRefreshResult !== null && (
+          <span className="text-xs text-live">{raRefreshResult} new events</span>
+        )}
+      </div>
+
+      {/* ── Scraper event import ───────────────────────────────────── */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={importScraperEvents}
+          disabled={scraperImporting}
+          className="flex items-center gap-2 px-3 py-2 rounded border border-rim text-ghost hover:text-soft hover:border-muted text-xs transition-colors disabled:opacity-40"
+        >
+          <RefreshCw size={13} className={scraperImporting ? "animate-spin" : ""} />
+          {scraperImporting ? "Importing scraper events…" : "Import Scraper Events"}
+        </button>
+        {scraperImportResult !== null && (
+          <span className="text-xs text-live">{scraperImportResult} events imported</span>
+        )}
+      </div>
 
       {/* ── Prune snapshots ──────────────────────────────────────────── */}
       <div className="flex items-center gap-2">
