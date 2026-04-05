@@ -3,7 +3,7 @@
  * All calls go through nginx proxy at /scraper-api/ → scraper:9000/api/
  */
 
-const BASE = "/scraper-api";
+const BASE = `${import.meta.env.BASE_URL}scraper-api`;
 
 async function get<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
   const url = new URL(BASE + path, window.location.origin);
