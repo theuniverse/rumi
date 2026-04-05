@@ -81,6 +81,39 @@ async def call_openrouter(
             )
             resp.raise_for_status()
             data = resp.json()
+
+        # Defensive response parsing — OpenRouter may return HTTP 200 with an
+        # error payload (e.g. rate-limit, upstream failure) where `choices` is
+        # null or the message object is missing.
+        if data.get("error"):
+            err = data["error"]
+            msg = err.get("message") or str(err)
+            raise ValueError(f"OpenRouter API error: {msg}")
+
+        choices = data.get("choices") or []
+        if not choices:
+            raise ValueError(f"OpenRouter returned no choices (data: {str(data)[:200]})")
+        first = choices[0] or {}
+        message = first.get("message") or {}
+        content = message.get("content") or ""
+
+        latency = int((time.monotonic() - t0) * 1000)
+        usage = data.get("usage", {})
+        input_t = usage.get("prompt_tokens", 0)
+        output_t = usage.get("completion_tokens", 0)
+        pricing = _PRICING.get(model, {"input": 0.35, "output": 0.40})
+        cost = (input_t * pricing["input"] + output_t * pricing["output"]) / 1_000_000
+
+        return LLMResult(
+            content=content,
+            model=model,
+            input_tokens=input_t,
+            output_tokens=output_t,
+            cost_usd=cost,
+            latency_ms=latency,
+            success=True,
+        )
+
     except Exception as e:
         latency = int((time.monotonic() - t0) * 1000)
         logger.error("OpenRouter call failed: %s", e)
@@ -88,24 +121,6 @@ async def call_openrouter(
             content="", model=model, input_tokens=0, output_tokens=0,
             cost_usd=0.0, latency_ms=latency, success=False, error=str(e),
         )
-
-    latency = int((time.monotonic() - t0) * 1000)
-    usage = data.get("usage", {})
-    input_t = usage.get("prompt_tokens", 0)
-    output_t = usage.get("completion_tokens", 0)
-    pricing = _PRICING.get(model, {"input": 0.35, "output": 0.40})
-    cost = (input_t * pricing["input"] + output_t * pricing["output"]) / 1_000_000
-
-    content = data["choices"][0]["message"]["content"]
-    return LLMResult(
-        content=content,
-        model=model,
-        input_tokens=input_t,
-        output_tokens=output_t,
-        cost_usd=cost,
-        latency_ms=latency,
-        success=True,
-    )
 
 
 # ── Prompt builders ──────────────────────────────────────────────────────────
