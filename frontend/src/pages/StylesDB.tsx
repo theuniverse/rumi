@@ -282,7 +282,7 @@ export default function StylesDB() {
           <span className="w-4 shrink-0" />
           <span className="w-2.5 shrink-0" />
           <span className="flex-1">Name</span>
-          <span className="w-28 text-right">BPM Range</span>
+          <span className="w-32 text-right">BPM Range</span>
           <span className="w-12" />
         </div>
 

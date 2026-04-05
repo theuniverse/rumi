@@ -179,7 +179,7 @@ function PlaceRow({
       {/* Main row */}
       <div className="flex items-center gap-3 px-4 py-3 text-sm">
         {/* Name & Type */}
-        <div className="w-40 shrink-0">
+        <div className="w-44 shrink-0">
           {editing ? (
             <div className="space-y-1.5">
               <input
@@ -226,12 +226,12 @@ function PlaceRow({
         </div>
 
         {/* Styles (view) */}
-        <div className="w-48 shrink-0">
+        <div className="w-40 shrink-0">
           {!editing && <TagPills tags={place.tags} />}
         </div>
 
         {/* Sessions */}
-        <div className="w-14 shrink-0 flex justify-end">
+        <div className="w-12 shrink-0 flex justify-end">
           {place.session_count > 0 ? (
             <span className="flex items-center gap-1 text-xs text-ghost">
               <Calendar size={10} className="text-faint" />
@@ -401,7 +401,7 @@ function AddPlaceForm({
   return (
     <form onSubmit={submit} className="border-b border-rim bg-elevated">
       <div className="flex items-center gap-3 px-4 py-3 text-sm">
-        <div className="w-40 shrink-0 space-y-1.5">
+        <div className="w-44 shrink-0 space-y-1.5">
           <input
             autoFocus
             value={name}
@@ -427,8 +427,8 @@ function AddPlaceForm({
           className="flex-1 min-w-0 bg-transparent text-ghost outline-none border-b border-sand/30 pb-px placeholder:text-faint"
         />
         {/* spacer for styles + sessions columns */}
-        <div className="w-48 shrink-0" />
-        <div className="w-14 shrink-0" />
+        <div className="w-40 shrink-0" />
+        <div className="w-12 shrink-0" />
         <div className="flex items-center gap-1 w-12 shrink-0 justify-end">
           <button
             type="submit"
@@ -542,10 +542,10 @@ export default function Places() {
         <div className="min-w-[600px]">
         {/* Column headers */}
         <div className="flex items-center gap-3 px-4 py-2.5 bg-surface border-b border-rim text-xs text-faint uppercase tracking-wider">
-          <span className="w-40 shrink-0">Name & Type</span>
+          <span className="w-44 shrink-0">Name & Type</span>
           <span className="flex-1">Address</span>
-          <span className="w-48 shrink-0">Styles</span>
-          <span className="w-14 shrink-0 text-right">Sessions</span>
+          <span className="w-40 shrink-0">Styles</span>
+          <span className="w-12 shrink-0 text-right">Sessions</span>
           <span className="w-8 shrink-0 text-center">RA</span>
           <span className="w-10 shrink-0" />
         </div>

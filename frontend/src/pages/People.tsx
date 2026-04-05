@@ -197,7 +197,7 @@ function PersonRow({
         </div>
 
         {/* City */}
-        <div className="w-32 shrink-0">
+        <div className="w-20 shrink-0">
           {editing ? (
             <input
               value={city}
@@ -214,7 +214,7 @@ function PersonRow({
         </div>
 
         {/* Social Links */}
-        <div className="flex-1 min-w-0">
+        <div className="w-16 shrink-0">
           {!editing && (
             <div className="flex items-center gap-2">
               {person.instagram && (
@@ -245,7 +245,7 @@ function PersonRow({
         </div>
 
         {/* Styles (view) */}
-        <div className="w-48 shrink-0">
+        <div className="flex-1 min-w-0">
           {!editing && <TagPills tags={person.tags} />}
         </div>
 
@@ -422,12 +422,12 @@ function AddPersonForm({
           value={city}
           onChange={(e) => setCity(e.target.value)}
           placeholder="City (optional)"
-          className="w-32 shrink-0 bg-transparent text-ghost outline-none border-b border-sand/30 pb-px placeholder:text-faint text-xs"
+          className="w-20 shrink-0 bg-transparent text-ghost outline-none border-b border-sand/30 pb-px placeholder:text-faint text-xs"
         />
 
-        <div className="flex-1 min-w-0" />
+        <div className="w-16 shrink-0" />
 
-        <div className="w-48 shrink-0" />
+        <div className="flex-1 min-w-0" />
 
         <div className="flex gap-1 w-12 shrink-0 justify-end">
           <button
@@ -537,9 +537,9 @@ export default function People() {
         {/* Column headers */}
         <div className="flex items-center gap-3 px-4 py-2.5 bg-surface border-b border-rim text-xs text-faint uppercase tracking-wider">
           <span className="w-40 shrink-0">Name & Type</span>
-          <span className="w-32 shrink-0">City</span>
-          <span className="flex-1">Social</span>
-          <span className="w-48 shrink-0">Styles</span>
+          <span className="w-20 shrink-0">City</span>
+          <span className="w-16 shrink-0">Social</span>
+          <span className="flex-1">Styles</span>
           <span className="w-8 shrink-0 text-center">RA</span>
           <span className="w-10 shrink-0" />
         </div>
