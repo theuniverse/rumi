@@ -110,11 +110,13 @@ async def call_openrouter(
 
 # ── Prompt builders ──────────────────────────────────────────────────────────
 
-def build_classify_messages(article_text: str, reference_context: str = "") -> list[dict]:
+def build_classify_messages(article_text: str, reference_context: str = "", source_context: str = "") -> list[dict]:
     system = (
         "你是电子音乐活动信息分析专家。分析微信公众号文章内容，"
         "判断是否包含活动信息及信息完整度等级。请用JSON格式输出。"
     )
+    if source_context:
+        system += "\n\n## 来源信息\n" + source_context
     if reference_context:
         system += "\n\n以下是已知的场地、艺人和厂牌参考数据，分析时请留意是否出现这些已知名称：\n" + reference_context
     return [
@@ -147,11 +149,13 @@ def build_classify_messages(article_text: str, reference_context: str = "") -> l
     ]
 
 
-def build_extract_messages(article_text: str, reference_context: str = "") -> list[dict]:
+def build_extract_messages(article_text: str, reference_context: str = "", source_context: str = "") -> list[dict]:
     system = (
         "你是电子音乐活动Line-up解析专家。从文本中提取结构化的DJ/VJ/Performer时段表信息。"
         "特别注意渐进披露：先有阵容后有具体时段。请用JSON格式输出。"
     )
+    if source_context:
+        system += "\n\n## 来源信息\n" + source_context
     if reference_context:
         system += (
             "\n\n以下是已知的场地、艺人和厂牌参考数据，提取时请优先匹配这些已知名称"

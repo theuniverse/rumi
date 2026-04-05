@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, Pencil, Trash2, Check, X, ToggleLeft, ToggleRight, FlaskConical, Loader, ExternalLink } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, ToggleLeft, ToggleRight, FlaskConical, Loader, ExternalLink, BookOpen } from "lucide-react";
 import clsx from "clsx";
 import { scraperApi, Source, SourceCreate, TestFetchResult, WeWeAccount } from "../../lib/scraper-api";
 
-const EMPTY_FORM: SourceCreate = { name: "", feed_path: "", keywords: [], city: "", active: true };
+const EMPTY_FORM: SourceCreate = { name: "", feed_path: "", keywords: [], city: "", active: true, notes: null };
 
 // WeWeRSS UI is served on port 4000 of whatever host this app is running on
 const WEWE_RSS_URL = `${window.location.protocol}//${window.location.hostname}:4000`;
@@ -115,7 +115,16 @@ function SourceRow({
   return (
     <>
       <tr className="border-t border-rim hover:bg-elevated/30 transition-colors text-xs">
-        <td className="px-3 py-2.5 text-soft">{source.name}</td>
+        <td className="px-3 py-2.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-soft">{source.name}</span>
+            {source.notes && (
+              <span title={source.notes}>
+                <BookOpen size={11} className="text-sky-400 shrink-0" />
+              </span>
+            )}
+          </div>
+        </td>
         <td className="px-3 py-2.5 text-ghost font-mono truncate max-w-[200px]">{source.feed_path}</td>
         <td className="px-3 py-2.5 text-ghost">{source.city || "—"}</td>
         <td className="px-3 py-2.5">
@@ -263,54 +272,71 @@ function SourceForm({
   }
 
   return (
-    <tr className="border-t border-rim bg-elevated/50 text-xs">
-      <td className="px-3 py-2">
-        <input
-          value={form.name}
-          onChange={(e) => set("name", e.target.value)}
-          placeholder="Source name"
-          className="w-full bg-surface border border-rim rounded px-2.5 py-1.5 text-soft text-xs focus:outline-none focus:border-ghost"
-        />
-      </td>
-      <td className="px-3 py-2">
-        <FeedPathCombobox
-          value={form.feed_path}
-          accounts={accounts}
-          onChange={(v) => set("feed_path", v)}
-          onSelectAccount={selectAccount}
-        />
-      </td>
-      <td className="px-3 py-2">
-        <input
-          value={form.city}
-          onChange={(e) => set("city", e.target.value)}
-          placeholder="City"
-          className="w-full bg-surface border border-rim rounded px-2.5 py-1.5 text-soft text-xs focus:outline-none focus:border-ghost"
-        />
-      </td>
-      <td className="px-3 py-2">
-        <KeywordInput value={form.keywords} onChange={(v) => set("keywords", v)} />
-      </td>
-      <td className="px-3 py-2">
-        <button onClick={() => set("active", !form.active)} className="text-ghost">
-          {form.active ? <ToggleRight size={16} className="text-emerald-400" /> : <ToggleLeft size={16} className="text-faint" />}
-        </button>
-      </td>
-      <td className="px-3 py-2">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => onSave(form)}
-            disabled={!form.name || !form.feed_path}
-            className="p-1 rounded hover:bg-emerald-400/10 text-ghost hover:text-emerald-400 transition-colors disabled:opacity-30"
-          >
-            <Check size={13} />
+    <>
+      <tr className="border-t border-rim bg-elevated/50 text-xs">
+        <td className="px-3 py-2">
+          <input
+            value={form.name}
+            onChange={(e) => set("name", e.target.value)}
+            placeholder="Source name"
+            className="w-full bg-surface border border-rim rounded px-2.5 py-1.5 text-soft text-xs focus:outline-none focus:border-ghost"
+          />
+        </td>
+        <td className="px-3 py-2">
+          <FeedPathCombobox
+            value={form.feed_path}
+            accounts={accounts}
+            onChange={(v) => set("feed_path", v)}
+            onSelectAccount={selectAccount}
+          />
+        </td>
+        <td className="px-3 py-2">
+          <input
+            value={form.city}
+            onChange={(e) => set("city", e.target.value)}
+            placeholder="City"
+            className="w-full bg-surface border border-rim rounded px-2.5 py-1.5 text-soft text-xs focus:outline-none focus:border-ghost"
+          />
+        </td>
+        <td className="px-3 py-2">
+          <KeywordInput value={form.keywords} onChange={(v) => set("keywords", v)} />
+        </td>
+        <td className="px-3 py-2">
+          <button onClick={() => set("active", !form.active)} className="text-ghost">
+            {form.active ? <ToggleRight size={16} className="text-emerald-400" /> : <ToggleLeft size={16} className="text-faint" />}
           </button>
-          <button onClick={onCancel} className="p-1 rounded hover:bg-elevated text-ghost hover:text-soft transition-colors">
-            <X size={13} />
-          </button>
-        </div>
-      </td>
-    </tr>
+        </td>
+        <td className="px-3 py-2">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onSave(form)}
+              disabled={!form.name || !form.feed_path}
+              className="p-1 rounded hover:bg-emerald-400/10 text-ghost hover:text-emerald-400 transition-colors disabled:opacity-30"
+            >
+              <Check size={13} />
+            </button>
+            <button onClick={onCancel} className="p-1 rounded hover:bg-elevated text-ghost hover:text-soft transition-colors">
+              <X size={13} />
+            </button>
+          </div>
+        </td>
+      </tr>
+      {/* Notes row — full width below the main fields */}
+      <tr className="bg-elevated/50">
+        <td colSpan={6} className="px-3 pb-3">
+          <div className="flex items-start gap-1.5">
+            <BookOpen size={12} className="text-sky-400 mt-2 shrink-0" />
+            <textarea
+              value={form.notes ?? ""}
+              onChange={(e) => set("notes", e.target.value || null)}
+              placeholder="提取辅助知识（可选）：如该公众号的主营风格、常驻场地、艺人名称惯用写法等，将直接注入 LLM prompt"
+              rows={3}
+              className="flex-1 bg-surface border border-rim rounded px-2.5 py-1.5 text-ghost text-xs font-mono placeholder:text-faint focus:outline-none focus:border-sky-400/50 resize-y"
+            />
+          </div>
+        </td>
+      </tr>
+    </>
   );
 }
 
@@ -470,7 +496,7 @@ export default function ScraperSources() {
               editId === s.id ? (
                 <SourceForm
                   key={s.id}
-                  initial={{ name: s.name, feed_path: s.feed_path, keywords: s.keywords, city: s.city, active: s.active }}
+                  initial={{ name: s.name, feed_path: s.feed_path, keywords: s.keywords, city: s.city, active: s.active, notes: s.notes }}
                   accounts={weweAccounts}
                   onSave={(form) => handleUpdate(s.id, form)}
                   onCancel={() => setEditId(null)}

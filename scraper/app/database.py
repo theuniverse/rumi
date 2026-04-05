@@ -36,6 +36,11 @@ async def init_db():
                 await conn.execute(text(f"ALTER TABLE extracted_events ADD COLUMN {col} {defn}"))
             except Exception:
                 pass
+        # Migration: add notes column to sources
+        try:
+            await conn.execute(text("ALTER TABLE sources ADD COLUMN notes TEXT"))
+        except Exception:
+            pass
 
 
 async def load_settings_from_db():

@@ -19,6 +19,7 @@ class SourceCreate(BaseModel):
     keywords: list[str] = []
     city: str = ""
     active: bool = True
+    notes: Optional[str] = None
 
 
 class SourceUpdate(BaseModel):
@@ -27,6 +28,7 @@ class SourceUpdate(BaseModel):
     keywords: Optional[list[str]] = None
     city: Optional[str] = None
     active: Optional[bool] = None
+    notes: Optional[str] = None
 
 
 def _serialize(s: Source) -> dict:
@@ -37,6 +39,7 @@ def _serialize(s: Source) -> dict:
         "keywords": json.loads(s.keywords or "[]"),
         "city": s.city,
         "active": s.active,
+        "notes": s.notes,
         "created_at": s.created_at,
         "updated_at": s.updated_at,
     }
@@ -56,6 +59,7 @@ async def create_source(body: SourceCreate, db: AsyncSession = Depends(get_db)):
         keywords=json.dumps(body.keywords, ensure_ascii=False),
         city=body.city,
         active=body.active,
+        notes=body.notes or None,
     )
     db.add(source)
     await db.commit()
@@ -79,6 +83,8 @@ async def update_source(source_id: int, body: SourceUpdate, db: AsyncSession = D
         source.city = body.city
     if body.active is not None:
         source.active = body.active
+    if body.notes is not None:
+        source.notes = body.notes or None
 
     await db.commit()
     await db.refresh(source)

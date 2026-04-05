@@ -45,6 +45,7 @@ class Source(Base):
     keywords = Column(Text, default="[]")              # JSON array of strings
     city = Column(String(100), default="")
     active = Column(Boolean, default=True)
+    notes = Column(Text, nullable=True)                # Human-maintained extraction hints injected into LLM prompt
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

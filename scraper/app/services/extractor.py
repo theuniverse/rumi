@@ -24,6 +24,18 @@ logger = logging.getLogger(__name__)
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+def _build_source_context(source) -> str:
+    """Build a concise source-info string to inject into LLM prompts."""
+    if not source:
+        return ""
+    parts = [f"来源公众号：{source.name}"]
+    if source.city:
+        parts.append(f"城市：{source.city}")
+    if source.notes:
+        parts.append(f"提取辅助备注：{source.notes}")
+    return "\n".join(parts)
+
+
 def _safe_json(text: str) -> dict:
     try:
         return json.loads(text)
@@ -121,7 +133,7 @@ async def classify_and_save(
             continue
 
         # Classify with LLM (now has full article text)
-        messages = build_classify_messages(content, ref_context)
+        messages = build_classify_messages(content, ref_context, _build_source_context(source))
         result = await call_openrouter(messages, model=settings.model_classify)
         prompt_text = messages[-1]["content"]
         await _save_llm_call(session, result, page.id, "monitor", "classify", prompt_text)
@@ -216,7 +228,10 @@ async def extract_single_page(session: AsyncSession, page_id: int, job=None) -> 
     # ── Step 1: LLM 提取 ────────────────────────────────────────────────────────
     _begin(1, f"调用 {settings.model_extract}…")
     ref_context = await build_reference_context(session)
-    messages = build_extract_messages(content, ref_context)
+    source = None
+    if page.source_id:
+        source = (await session.execute(select(Source).where(Source.id == page.source_id))).scalar_one_or_none()
+    messages = build_extract_messages(content, ref_context, _build_source_context(source))
     llm = await call_openrouter(messages, model=settings.model_extract, max_tokens=6000)
     await _save_llm_call(session, llm, page.id, "rerun", "extract", messages[-1]["content"])
 
@@ -277,7 +292,10 @@ async def extract_pending(session: AsyncSession) -> int:
                 logger.warning("Full article fetch failed for page %d, extracting from title only", page.id)
             await asyncio.sleep(1.5)   # rate limit WeChat fetches
 
-        messages = build_extract_messages(content, ref_context)
+        page_source = None
+        if page.source_id:
+            page_source = (await session.execute(select(Source).where(Source.id == page.source_id))).scalar_one_or_none()
+        messages = build_extract_messages(content, ref_context, _build_source_context(page_source))
         llm = await call_openrouter(messages, model=settings.model_extract, max_tokens=6000)
         await _save_llm_call(session, llm, page.id, "extract", "extract", messages[-1]["content"])
 
