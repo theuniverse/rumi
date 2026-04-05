@@ -6,6 +6,7 @@ import { scraperApi, ScrapedPage, Source } from "../../lib/scraper-api";
 
 const STATUS_CFG: Record<string, string> = {
   new:             "text-sky-400 bg-sky-400/10 border-sky-400/30",
+  needs_content:   "text-orange-400 bg-orange-400/10 border-orange-400/30",
   pending_extract: "text-amber-400 bg-amber-400/10 border-amber-400/30",
   extracting:      "text-purple-400 bg-purple-400/10 border-purple-400/30",
   done:            "text-emerald-400 bg-emerald-400/10 border-emerald-400/30",
@@ -93,6 +94,7 @@ export default function ScraperPages() {
         >
           <option value="">All statuses</option>
           <option value="new">new</option>
+          <option value="needs_content">needs_content</option>
           <option value="pending_extract">pending_extract</option>
           <option value="done">done</option>
           <option value="error">error</option>

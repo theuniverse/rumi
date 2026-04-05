@@ -19,6 +19,35 @@ _HEADERS = {
     "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
 }
 
+# curl_cffi impersonates Chrome's TLS/HTTP2 fingerprint at the libcurl layer.
+# Combined with realistic browser headers this bypasses most server-side bot
+# checks that httpx fails (httpx TLS JA3 is trivially detected as non-browser).
+_WECHAT_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,"
+              "image/webp,image/apng,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer": "https://mp.weixin.qq.com/",
+    "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"macOS"',
+    "sec-fetch-dest": "document",
+    "sec-fetch-mode": "navigate",
+    "sec-fetch-site": "same-origin",
+    "sec-fetch-user": "?1",
+    "upgrade-insecure-requests": "1",
+}
+
+# Signals that WeChat returned a bot-verification page instead of the article.
+_WECHAT_BLOCKED_SIGNALS = [
+    "环境异常",
+    "当前环境异常",
+    "verify.qq.com",
+    "mpverify.qq.com",
+]
+
 
 async def fetch_source_articles(source: Source) -> list[dict[str, Any]]:
     """
@@ -87,16 +116,32 @@ async def fetch_article_text(url: str) -> str:
     """
     Fetch a WeChat article URL and return cleaned plain text.
 
-    WeChat articles (mp.weixin.qq.com) are publicly accessible via HTTP.
-    We strip scripts/styles and extract the article body so the LLM gets
-    dense text instead of raw HTML noise.
+    Uses curl_cffi to impersonate Chrome's TLS/HTTP2 fingerprint, which is
+    required to pass WeChat's server-side bot detection. Plain httpx has a
+    distinctive Python TLS signature that WeChat blocks with a verification page.
 
     Returns empty string on failure (caller should fall back to RSS content).
     """
     try:
-        html, _ = await fetch_page_html(url)
+        from curl_cffi.requests import AsyncSession
+        async with AsyncSession() as session:
+            resp = await session.get(
+                url,
+                headers=_WECHAT_HEADERS,
+                impersonate="chrome124",
+                timeout=30,
+                allow_redirects=True,
+            )
+            resp.raise_for_status()
+            html = resp.text
     except Exception as e:
         logger.warning("fetch_article_text: HTTP failed for %s: %s", url, e)
+        return ""
+
+    # Detect WeChat bot-check / verification page — treat as a fetch failure
+    # so the caller falls back to RSS content instead of sending garbage to LLM.
+    if any(signal in html for signal in _WECHAT_BLOCKED_SIGNALS):
+        logger.warning("fetch_article_text: WeChat bot-check triggered for %s", url)
         return ""
 
     try:

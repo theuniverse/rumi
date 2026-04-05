@@ -93,24 +93,32 @@ async def classify_and_save(
         # We rate-limit to 1 req/1.5 s to stay polite with mp.weixin.qq.com.
         content = article["content"]
         is_wechat = "mp.weixin.qq.com" in url
+        wechat_blocked = False
         if is_wechat and len(content.strip()) < 300:
             logger.info("Pre-fetching full article for classify: %s", article["title"])
             fetched = await fetch_article_text(url)
             if fetched:
                 content = fetched
                 content_hash = __import__("hashlib").sha256(content.encode()).hexdigest()
+            else:
+                wechat_blocked = True
+                logger.warning("WeChat fetch blocked for '%s' — saving as needs_content", article["title"])
             await asyncio.sleep(1.5)   # polite rate limit for WeChat
 
         page = ScrapedPage(
             source_id=source.id,
             url=url,
             content_hash=content_hash,
-            raw_html=content,          # store full content, not just RSS title
-            status=PageStatus.new,
+            raw_html=content,          # title stub until manual content is provided
+            status=PageStatus.needs_content if wechat_blocked else PageStatus.new,
         )
         session.add(page)
         await session.flush()
         new_count += 1
+
+        if wechat_blocked:
+            # No content to classify — wait for user to paste it in the UI
+            continue
 
         # Classify with LLM (now has full article text)
         messages = build_classify_messages(content, ref_context)

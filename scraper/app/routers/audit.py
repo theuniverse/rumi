@@ -209,6 +209,38 @@ async def get_page_detail(page_id: int, db: AsyncSession = Depends(get_db)):
     }
 
 
+@router.patch("/audit/pages/{page_id}/content")
+async def set_page_content(
+    page_id: int,
+    body: dict,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """Save manually-pasted article text and immediately kick off extraction."""
+    import hashlib
+    from fastapi import HTTPException
+    page = (await db.execute(select(ScrapedPage).where(ScrapedPage.id == page_id))).scalar_one_or_none()
+    if not page:
+        raise HTTPException(status_code=404, detail="Page not found")
+    content = (body.get("content") or "").strip()
+    if not content:
+        raise HTTPException(status_code=422, detail="content must not be empty")
+    page.raw_html = content
+    page.content_hash = hashlib.sha256(content.encode()).hexdigest()
+    page.status = PageStatus.pending_extract
+    await db.commit()
+
+    async def _run():
+        try:
+            from app.jobs import run_extract_single
+            await run_extract_single(page_id)
+        except Exception as e:
+            logger.error("Extract after manual content failed for page %d: %s", page_id, e)
+
+    background_tasks.add_task(_run)
+    return {"ok": True, "page_id": page_id, "status": "pending_extract"}
+
+
 @router.post("/audit/pages/{page_id}/rerun")
 async def rerun_page(
     page_id: int,

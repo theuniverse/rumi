@@ -43,6 +43,16 @@ async function del<T>(path: string): Promise<T> {
   return res.json();
 }
 
+async function patch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(BASE + path, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`PATCH ${path} → ${res.status}`);
+  return res.json();
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface Dashboard {
@@ -66,12 +76,14 @@ export interface ScrapeRun {
   error_msg: string | null;
 }
 
+export type PageStatus = "new" | "needs_content" | "pending_extract" | "extracting" | "done" | "error";
+
 export interface ScrapedPage {
   id: number;
   url: string;
   source_id: number | null;
   source_name: string;
-  status: "new" | "pending_extract" | "extracting" | "done" | "error";
+  status: PageStatus;
   content_hash: string;
   fetched_at: string;
   updated_at: string;
@@ -273,6 +285,8 @@ export const scraperApi = {
 
   getPageDetail: (id: number) => get<PageDetail>(`/audit/pages/${id}`),
   rerunPage: (id: number) => post<{ ok: boolean; page_id: number; status: string }>(`/audit/pages/${id}/rerun`),
+  setPageContent: (id: number, content: string) =>
+    patch<{ ok: boolean; page_id: number; status: string }>(`/audit/pages/${id}/content`, { content }),
 
   getLlmCalls: (params?: { task?: string; limit?: number; offset?: number }) =>
     get<{ total: number; total_cost_usd: number; items: LLMCallSummary[] }>(

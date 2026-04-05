@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, ChevronDown, ChevronUp, ExternalLink, RefreshCw, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, ExternalLink, RefreshCw, CheckCircle2, XCircle, Clock, AlertTriangle, ClipboardPaste } from "lucide-react";
 import clsx from "clsx";
 import { scraperApi, PageDetail } from "../../lib/scraper-api";
 
@@ -134,6 +134,76 @@ function RerunStatusBlock({
   );
 }
 
+// ── Manual content input (shown when needs_content) ──────────────────────────
+
+function ManualContentInput({
+  blocked,
+  onSubmit,
+}: {
+  blocked: boolean;
+  onSubmit: (text: string) => Promise<void>;
+}) {
+  const [text, setText]     = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit() {
+    const trimmed = text.trim();
+    if (!trimmed || saving) return;
+    setSaving(true);
+    try {
+      await onSubmit(trimmed);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className={clsx(
+      "rounded-lg border p-4 space-y-3",
+      blocked ? "border-orange-400/30 bg-orange-400/5" : "border-rim bg-elevated/40",
+    )}>
+      {blocked && (
+        <div className="flex items-start gap-2">
+          <AlertTriangle size={14} className="text-orange-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-orange-400 text-xs font-medium">自动抓取被拦截</p>
+            <p className="text-ghost text-xs mt-0.5">
+              WeChat 将服务器请求识别为机器人，无法获取正文。
+              请手工打开原文，复制全部文字内容粘贴到下方，之后的 LLM 分析步骤会自动继续。
+            </p>
+          </div>
+        </div>
+      )}
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder={blocked ? "将文章正文粘贴到这里…" : "粘贴新正文以替换现有内容并重新分析…"}
+        rows={blocked ? 10 : 6}
+        className={clsx(
+          "w-full bg-surface border rounded px-3 py-2 text-ghost text-xs font-mono placeholder:text-faint focus:outline-none resize-y",
+          blocked ? "border-rim focus:border-orange-400/50" : "border-rim focus:border-sky-400/50",
+        )}
+      />
+      <div className="flex items-center justify-between">
+        <span className="text-faint text-[10px]">{text.trim().length} 字符</span>
+        <button
+          onClick={handleSubmit}
+          disabled={!text.trim() || saving}
+          className={clsx(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs transition-colors disabled:opacity-40",
+            blocked
+              ? "border-orange-400/40 text-orange-400 hover:bg-orange-400/10"
+              : "border-rim text-ghost hover:text-soft hover:bg-elevated",
+          )}
+        >
+          <ClipboardPaste size={12} />
+          {saving ? "提交中…" : blocked ? "提交正文并开始分析" : "替换正文并重新分析"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ──────────────────────────────────────────────────────────
 
 const POLL_INTERVAL_MS = 2000;
@@ -205,23 +275,31 @@ export default function ScraperPageDetail() {
     elapsedTimer.current = null;
   }
 
+  async function startRerunPolling() {
+    const updated = await scraperApi.getPageDetail(Number(id));
+    setDetail(updated);
+    startTime.current = Date.now();
+    setElapsed(0);
+    setRerunActive(true);
+  }
+
   async function handleRerun() {
     if (!id || rerunning) return;
     setRerunning(true);
     try {
       await scraperApi.rerunPage(Number(id));
-      // Immediately refresh so status shows pending_extract
-      const updated = await scraperApi.getPageDetail(Number(id));
-      setDetail(updated);
-      // Start polling block
-      startTime.current = Date.now();
-      setElapsed(0);
-      setRerunActive(true);
+      await startRerunPolling();
     } catch (e) {
       alert(`Re-run failed: ${e}`);
     } finally {
       setRerunning(false);
     }
+  }
+
+  async function handleManualContent(text: string) {
+    if (!id) return;
+    await scraperApi.setPageContent(Number(id), text);
+    await startRerunPolling();
   }
 
   function dismissRerun() {
@@ -255,6 +333,7 @@ export default function ScraperPageDetail() {
               detail.status === "error"           ? "text-red-400 bg-red-400/10 border-red-400/30" :
               detail.status === "extracting"      ? "text-purple-400 bg-purple-400/10 border-purple-400/30" :
               detail.status === "pending_extract" ? "text-amber-400 bg-amber-400/10 border-amber-400/30" :
+              detail.status === "needs_content"   ? "text-orange-400 bg-orange-400/10 border-orange-400/30" :
               "text-ghost border-rim"
             )}>
               {detail.status}
@@ -285,7 +364,20 @@ export default function ScraperPageDetail() {
         </button>
       </div>
 
-      {/* Re-run status block — appears after clicking Re-run */}
+      {/* Manual content input — always available; orange mode when fetch was blocked */}
+      {!rerunActive && (
+        <Section
+          title={detail.status === "needs_content" ? "⚠ 手工提供正文" : "替换正文"}
+          defaultOpen={detail.status === "needs_content"}
+        >
+          <ManualContentInput
+            blocked={detail.status === "needs_content"}
+            onSubmit={handleManualContent}
+          />
+        </Section>
+      )}
+
+      {/* Re-run status block — appears after clicking Re-run or submitting manual content */}
       {rerunActive && (
         <RerunStatusBlock
           pageStatus={detail.status}

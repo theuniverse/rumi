@@ -17,6 +17,7 @@ class SourceStatus(str, enum.Enum):
 
 class PageStatus(str, enum.Enum):
     new = "new"
+    needs_content = "needs_content"   # auto-fetch blocked; awaiting manual paste
     pending_extract = "pending_extract"
     extracting = "extracting"
     done = "done"
