@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const CURRENT_VERSION = "2026033102520001";
+const CURRENT_VERSION = "2026040500010002";
 const CHECK_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes
 
 export function useVersionCheck() {

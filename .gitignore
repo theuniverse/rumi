@@ -26,3 +26,6 @@ backend/storage/uploads/*
 
 # Docker local overrides
 docker-compose.override.yml
+
+# Scraper SQLite database (runtime data, not source)
+scraper/data/scraper.db
