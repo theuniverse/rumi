@@ -219,6 +219,7 @@ async def set_page_content(
     """Save manually-pasted article text and immediately kick off extraction."""
     import hashlib
     from fastapi import HTTPException
+    from app.services.rerun_tracker import create_job
     page = (await db.execute(select(ScrapedPage).where(ScrapedPage.id == page_id))).scalar_one_or_none()
     if not page:
         raise HTTPException(status_code=404, detail="Page not found")
@@ -230,15 +231,17 @@ async def set_page_content(
     page.status = PageStatus.pending_extract
     await db.commit()
 
+    job = create_job(page_id)
+
     async def _run():
         try:
-            from app.jobs import run_extract_single
-            await run_extract_single(page_id)
+            from app.jobs import run_extract_single_with_job
+            await run_extract_single_with_job(page_id, job)
         except Exception as e:
             logger.error("Extract after manual content failed for page %d: %s", page_id, e)
 
     background_tasks.add_task(_run)
-    return {"ok": True, "page_id": page_id, "status": "pending_extract"}
+    return {"ok": True, "page_id": page_id, "run_id": job.run_id, "status": "pending_extract"}
 
 
 @router.post("/audit/pages/{page_id}/rerun")
@@ -247,25 +250,44 @@ async def rerun_page(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
-    """Reset a page to pending_extract and immediately kick off the extract job."""
+    """Reset a page to pending_extract and kick off extraction with per-step tracking."""
     from fastapi import HTTPException
+    from app.services.rerun_tracker import create_job
     page = (await db.execute(select(ScrapedPage).where(ScrapedPage.id == page_id))).scalar_one_or_none()
     if not page:
         raise HTTPException(status_code=404, detail="Page not found")
     page.status = PageStatus.pending_extract
     await db.commit()
 
-    # Run single-page extraction in the background with per-step commits
-    # so the polling client can observe: pending_extract → extracting → done/error
+    job = create_job(page_id)
+
     async def _run():
         try:
-            from app.jobs import run_extract_single
-            await run_extract_single(page_id)
+            from app.jobs import run_extract_single_with_job
+            await run_extract_single_with_job(page_id, job)
         except Exception as e:
             logger.error("Rerun extract failed for page %d: %s", page_id, e)
 
     background_tasks.add_task(_run)
-    return {"ok": True, "page_id": page_id, "status": "pending_extract"}
+    return {"ok": True, "page_id": page_id, "run_id": job.run_id, "status": "pending_extract"}
+
+
+@router.get("/audit/pages/{page_id}/reruns")
+async def list_reruns(page_id: int, db: AsyncSession = Depends(get_db)):
+    """Return all tracked re-run jobs for a page (newest first)."""
+    from app.services.rerun_tracker import get_jobs
+    return {"items": [j.to_dict() for j in get_jobs(page_id)]}
+
+
+@router.get("/audit/pages/{page_id}/reruns/{run_id}")
+async def get_rerun(page_id: int, run_id: str, db: AsyncSession = Depends(get_db)):
+    """Poll a specific re-run job for its current step statuses."""
+    from fastapi import HTTPException
+    from app.services.rerun_tracker import get_job
+    job = get_job(page_id, run_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return job.to_dict()
 
 
 @router.get("/audit/llm-calls")

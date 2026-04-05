@@ -143,64 +143,107 @@ async def classify_and_save(
 
 # ── Extract: deep extraction ──────────────────────────────────────────────────
 
-async def extract_single_page(session: AsyncSession, page_id: int) -> None:
-    """Extract a single specific page with per-step commits so pollers see status transitions."""
+async def extract_single_page(session: AsyncSession, page_id: int, job=None) -> None:
+    """Extract a single page.  If *job* (a RerunJob) is supplied every sub-step
+    updates its status so the polling client can show granular progress."""
+    from datetime import datetime as _dt
+
+    def _step(idx: int):
+        return job.steps[idx] if job else None
+
+    def _begin(idx: int, detail: str = ""):
+        s = _step(idx)
+        if s:
+            s.status = "running"
+            s.started_at = _dt.utcnow()
+            if detail:
+                s.detail = detail
+
+    def _finish(idx: int, status: str, detail: str = ""):
+        s = _step(idx)
+        if s:
+            s.status = status
+            s.finished_at = _dt.utcnow()
+            if detail:
+                s.detail = detail
+
     page = (
         await session.execute(select(ScrapedPage).where(ScrapedPage.id == page_id))
     ).scalar_one_or_none()
     if not page:
         logger.warning("[rerun] Page %d not found", page_id)
+        if job:
+            job.status = "error"
+            job.error = "Page not found"
+            job.finished_at = _dt.utcnow()
         return
     if page.status not in (PageStatus.pending_extract, PageStatus.error):
         logger.info("[rerun] Page %d is in status %s — skipping", page_id, page.status)
+        if job:
+            job.status = "error"
+            job.error = f"Unexpected status: {page.status}"
+            job.finished_at = _dt.utcnow()
         return
 
-    # Commit extracting status so the polling client can see the transition
     page.status = PageStatus.extracting
     await session.commit()
 
-    # Check whether full article text was properly fetched.
-    # WeChat articles are typically 2000–10000+ chars; anything shorter is likely
-    # just the RSS title/stub that the classify step grabbed.  Non-WeChat pages
-    # are lighter so we use a lower floor of 500 chars.
+    # ── Step 0: 正文准备 ────────────────────────────────────────────────────────
     content = page.raw_html or ""
     url = page.url or ""
     is_wechat = "mp.weixin.qq.com" in url
     full_content_floor = 2000 if is_wechat else 500
 
-    if len(content) < full_content_floor and url:
+    _begin(0)
+    if len(content) >= full_content_floor:
+        _finish(0, "skipped", f"已有 {len(content):,} 字符，直接提取")
+    else:
+        _begin(0, f"正文不足（{len(content):,} 字符），尝试抓取…")
         from app.scrapers.rss_fetcher import fetch_article_text
-        logger.info(
-            "[rerun] Content looks incomplete (%d chars, floor %d) for page %d — re-fetching full article",
-            len(content), full_content_floor, page_id,
-        )
         full_text = await fetch_article_text(url)
         if full_text and len(full_text) > len(content):
             logger.info("[rerun] Got full article (%d chars) for page %d", len(full_text), page_id)
             content = full_text
             page.raw_html = full_text
             await session.commit()
+            _finish(0, "done", f"抓取成功，{len(content):,} 字符")
+        elif not full_text:
+            _finish(0, "error", f"WeChat 拦截验证，继续使用 {len(content):,} 字符")
         else:
-            logger.warning(
-                "[rerun] Re-fetch didn't improve content for page %d (%d → %d chars), proceeding with existing",
-                page_id, len(content), len(full_text) if full_text else 0,
-            )
+            _finish(0, "done", f"重新抓取无改善，使用现有 {len(content):,} 字符")
         await asyncio.sleep(1.5)
 
+    # ── Step 1: LLM 提取 ────────────────────────────────────────────────────────
+    _begin(1, f"调用 {settings.model_extract}…")
     ref_context = await build_reference_context(session)
     messages = build_extract_messages(content, ref_context)
     llm = await call_openrouter(messages, model=settings.model_extract, max_tokens=6000)
     await _save_llm_call(session, llm, page.id, "rerun", "extract", messages[-1]["content"])
 
     if llm.success:
+        _finish(1, "done",
+                f"{llm.model} · {llm.input_tokens}+{llm.output_tokens} tok · {llm.latency_ms}ms")
+    else:
+        _finish(1, "error", f"{llm.model} · {llm.error or 'unknown error'}")
+        logger.error("[rerun] LLM extract failed for page %d: %s", page_id, llm.error)
+
+    # ── Step 2: 保存结果 ─────────────────────────────────────────────────────────
+    _begin(2)
+    if llm.success:
         data = _safe_json(llm.content)
         await _upsert_event(session, page, data, llm.content)
         page.status = PageStatus.done
+        event_name = (data.get("event") or {}).get("name")
+        _finish(2, "done", f"活动：{event_name}" if event_name else "未检测到活动")
     else:
-        logger.error("[rerun] LLM extract failed for page %d: %s", page_id, llm.error)
         page.status = PageStatus.error
+        _finish(2, "skipped", "LLM 失败，已跳过")
 
     await session.commit()
+
+    if job:
+        job.status = "done" if page.status == PageStatus.done else "error"
+        job.finished_at = _dt.utcnow()
 
 
 async def extract_pending(session: AsyncSession) -> int:

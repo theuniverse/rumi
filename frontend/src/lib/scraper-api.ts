@@ -89,6 +89,25 @@ export interface ScrapedPage {
   updated_at: string;
 }
 
+export interface RunStep {
+  key: string;
+  label: string;
+  status: "pending" | "running" | "done" | "skipped" | "error";
+  detail: string;
+  duration_ms: number | null;
+}
+
+export interface RerunJob {
+  run_id: string;
+  page_id: number;
+  status: "running" | "done" | "error";
+  steps: RunStep[];
+  created_at: string;
+  finished_at: string | null;
+  elapsed_ms: number;
+  error: string | null;
+}
+
 export interface LLMCallSummary {
   id: number;
   page_id: number | null;
@@ -284,9 +303,14 @@ export const scraperApi = {
     get<{ total: number; items: ScrapedPage[] }>("/audit/pages", params as Record<string, string | number>),
 
   getPageDetail: (id: number) => get<PageDetail>(`/audit/pages/${id}`),
-  rerunPage: (id: number) => post<{ ok: boolean; page_id: number; status: string }>(`/audit/pages/${id}/rerun`),
+  rerunPage: (id: number) =>
+    post<{ ok: boolean; page_id: number; run_id: string; status: string }>(`/audit/pages/${id}/rerun`),
   setPageContent: (id: number, content: string) =>
-    patch<{ ok: boolean; page_id: number; status: string }>(`/audit/pages/${id}/content`, { content }),
+    patch<{ ok: boolean; page_id: number; run_id: string; status: string }>(`/audit/pages/${id}/content`, { content }),
+  getReruns: (id: number) =>
+    get<{ items: RerunJob[] }>(`/audit/pages/${id}/reruns`),
+  getRerun: (id: number, runId: string) =>
+    get<RerunJob>(`/audit/pages/${id}/reruns/${runId}`),
 
   getLlmCalls: (params?: { task?: string; limit?: number; offset?: number }) =>
     get<{ total: number; total_cost_usd: number; items: LLMCallSummary[] }>(

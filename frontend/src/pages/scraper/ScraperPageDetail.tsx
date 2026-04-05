@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, ChevronDown, ChevronUp, ExternalLink, RefreshCw, CheckCircle2, XCircle, Clock, AlertTriangle, ClipboardPaste } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, ExternalLink, RefreshCw, CheckCircle2, XCircle, Clock, AlertTriangle, ClipboardPaste, SkipForward, Loader2 } from "lucide-react";
 import clsx from "clsx";
-import { scraperApi, PageDetail } from "../../lib/scraper-api";
+import { scraperApi, PageDetail, RerunJob, RunStep } from "../../lib/scraper-api";
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
@@ -41,95 +41,88 @@ function ConfidenceBar({ value }: { value: number }) {
   );
 }
 
-// Status pipeline step labels & order
-const PIPELINE: Array<{ key: string; label: string }> = [
-  { key: "pending_extract", label: "Queued" },
-  { key: "extracting",      label: "Extracting" },
-  { key: "done",            label: "Done" },
-];
+// ── Per-step icon ─────────────────────────────────────────────────────────────
 
-function RerunStatusBlock({
-  pageStatus,
-  elapsed,
-  onDismiss,
-}: {
-  pageStatus: string;
-  elapsed: number;
-  onDismiss: () => void;
-}) {
-  const isError   = pageStatus === "error";
-  const isDone    = pageStatus === "done";
-  const isRunning = !isDone && !isError;
+function StepIcon({ status }: { status: RunStep["status"] }) {
+  if (status === "running")  return <Loader2 size={12} className="text-amber-400 animate-spin shrink-0" />;
+  if (status === "done")     return <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />;
+  if (status === "skipped")  return <SkipForward size={12} className="text-ghost shrink-0" />;
+  if (status === "error")    return <XCircle size={12} className="text-red-400 shrink-0" />;
+  return <div className="w-3 h-3 rounded-full border border-rim shrink-0" />;
+}
 
-  const currentIdx = PIPELINE.findIndex((s) => s.key === pageStatus);
+// ── Single run card ────────────────────────────────────────────────────────────
+
+function RunCard({ job, defaultOpen }: { job: RerunJob; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen ?? false);
+
+  const isDone    = job.status === "done";
+  const isError   = job.status === "error";
+  const isRunning = job.status === "running";
+  const elapsedS  = (job.elapsed_ms / 1000).toFixed(1);
 
   return (
     <div className={clsx(
-      "rounded-lg border p-3 space-y-2.5 transition-colors",
-      isDone  ? "border-emerald-400/30 bg-emerald-400/5" :
-      isError ? "border-red-400/30 bg-red-400/5" :
-                "border-amber-400/30 bg-amber-400/5",
+      "rounded-lg border overflow-hidden",
+      isDone  ? "border-emerald-400/25" :
+      isError ? "border-red-400/25" :
+                "border-amber-400/25",
     )}>
-      {/* Header row */}
-      <div className="flex items-center gap-2">
-        {isRunning && <RefreshCw size={13} className="text-amber-400 animate-spin shrink-0" />}
-        {isDone    && <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />}
-        {isError   && <XCircle size={13} className="text-red-400 shrink-0" />}
+      {/* Header */}
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-elevated/40 transition-colors"
+      >
+        {isRunning && <RefreshCw size={12} className="text-amber-400 animate-spin shrink-0" />}
+        {isDone    && <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />}
+        {isError   && <XCircle size={12} className="text-red-400 shrink-0" />}
 
-        <span className={clsx("text-xs font-medium",
+        <span className={clsx("text-xs font-mono",
           isDone ? "text-emerald-400" : isError ? "text-red-400" : "text-amber-400"
         )}>
-          {isDone ? "Extraction complete" : isError ? "Extraction failed" : "Re-running extraction…"}
+          #{job.run_id}
         </span>
-
-        <span className="text-faint text-[10px] ml-auto flex items-center gap-1">
+        <span className="text-faint text-[10px]">
+          {new Date(job.created_at).toLocaleTimeString()}
+        </span>
+        <span className={clsx("text-[10px] ml-auto flex items-center gap-1",
+          isDone ? "text-emerald-400" : isError ? "text-red-400" : "text-amber-400"
+        )}>
           <Clock size={10} />
-          {elapsed}s
+          {elapsedS}s
         </span>
+        {open ? <ChevronUp size={12} className="text-ghost shrink-0" /> : <ChevronDown size={12} className="text-ghost shrink-0" />}
+      </button>
 
-        {(isDone || isError) && (
-          <button
-            onClick={onDismiss}
-            className="text-faint hover:text-ghost text-[10px] ml-1 transition-colors"
-          >
-            dismiss
-          </button>
-        )}
-      </div>
-
-      {/* Pipeline steps */}
-      <div className="flex items-center gap-0">
-        {PIPELINE.map((step, i) => {
-          const isActive  = step.key === pageStatus;
-          const isPast    = currentIdx > i || isDone;
-          const isUpcoming = currentIdx < i && !isDone;
-          return (
-            <div key={step.key} className="flex items-center">
-              {i > 0 && (
-                <div className={clsx("h-px w-6 mx-1", isPast || isDone ? "bg-emerald-400/50" : "bg-rim")} />
-              )}
-              <div className="flex flex-col items-center gap-0.5">
-                <div className={clsx(
-                  "w-2 h-2 rounded-full transition-colors",
-                  isError && isActive ? "bg-red-400" :
-                  isDone || isPast    ? "bg-emerald-400" :
-                  isActive            ? "bg-amber-400 ring-2 ring-amber-400/30" :
-                  "bg-rim",
-                )} />
-                <span className={clsx(
-                  "text-[9px] whitespace-nowrap",
-                  isError && isActive ? "text-red-400" :
-                  isDone || isPast    ? "text-emerald-400" :
-                  isActive            ? "text-amber-400" :
-                  isUpcoming          ? "text-faint" : "text-ghost",
-                )}>
-                  {step.label}
-                </span>
+      {/* Steps */}
+      {open && (
+        <div className="border-t border-rim divide-y divide-rim">
+          {job.steps.map((step) => (
+            <div key={step.key} className="flex items-start gap-2.5 px-4 py-2.5">
+              <div className="mt-0.5"><StepIcon status={step.status} /></div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-ghost text-xs">{step.label}</span>
+                  {step.duration_ms != null && (
+                    <span className="text-faint text-[10px]">{step.duration_ms}ms</span>
+                  )}
+                </div>
+                {step.detail && (
+                  <p className={clsx("text-[11px] mt-0.5 break-all",
+                    step.status === "error" ? "text-red-400" :
+                    step.status === "skipped" ? "text-faint" : "text-ghost"
+                  )}>
+                    {step.detail}
+                  </p>
+                )}
               </div>
             </div>
-          );
-        })}
-      </div>
+          ))}
+          {job.error && (
+            <div className="px-4 py-2 text-red-400 text-[11px]">{job.error}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -218,13 +211,11 @@ export default function ScraperPageDetail() {
   const [error, setError]     = useState<string | null>(null);
   const [expandPrompt, setExpandPrompt] = useState<number | null>(null);
 
-  // Re-run state
-  const [rerunActive, setRerunActive]   = useState(false);  // block visible
-  const [rerunning,   setRerunning]     = useState(false);  // button spinner
-  const [elapsed,     setElapsed]       = useState(0);
-  const pollTimer   = useRef<ReturnType<typeof setInterval> | null>(null);
-  const elapsedTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const startTime   = useRef<number>(0);
+  // Re-run jobs list (newest first)
+  const [runs, setRuns]       = useState<RerunJob[]>([]);
+  const [rerunning, setRerunning] = useState(false);
+  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeRunId = useRef<string | null>(null);
 
   // Initial load
   useEffect(() => {
@@ -236,75 +227,77 @@ export default function ScraperPageDetail() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  // Polling logic — runs while rerunActive and not yet terminal
-  useEffect(() => {
-    if (!rerunActive || !id) return;
-    const terminal = (s: string) => s === "done" || s === "error";
+  // Poll the active run until terminal
+  function startPolling(runId: string) {
+    activeRunId.current = runId;
+    if (pollTimer.current) clearInterval(pollTimer.current);
 
     pollTimer.current = setInterval(async () => {
+      if (!id || activeRunId.current !== runId) return;
       try {
-        const updated = await scraperApi.getPageDetail(Number(id));
-        setDetail(updated);
-        if (terminal(updated.status)) {
-          stopPolling();
+        const [job, page] = await Promise.all([
+          scraperApi.getRerun(Number(id), runId),
+          scraperApi.getPageDetail(Number(id)),
+        ]);
+        setRuns((prev) => prev.map((r) => r.run_id === runId ? job : r));
+        setDetail(page);
+        if (job.status !== "running") {
+          clearInterval(pollTimer.current!);
+          pollTimer.current = null;
+          activeRunId.current = null;
         }
       } catch {
-        // ignore transient errors while polling
+        // ignore transient poll errors
       }
     }, POLL_INTERVAL_MS);
 
-    // Elapsed-seconds counter
-    elapsedTimer.current = setInterval(() => {
-      setElapsed(Math.round((Date.now() - startTime.current) / 1000));
-    }, 1000);
-
-    // Safety timeout
-    const safetyTimeout = setTimeout(() => stopPolling(), POLL_TIMEOUT_MS);
-
-    return () => {
-      clearInterval(pollTimer.current!);
-      clearInterval(elapsedTimer.current!);
-      clearTimeout(safetyTimeout);
-    };
-  }, [rerunActive, id]);
-
-  function stopPolling() {
-    clearInterval(pollTimer.current!);
-    clearInterval(elapsedTimer.current!);
-    pollTimer.current = null;
-    elapsedTimer.current = null;
+    // Safety timeout — stop after 2 min regardless
+    setTimeout(() => {
+      if (activeRunId.current === runId) {
+        clearInterval(pollTimer.current!);
+        pollTimer.current = null;
+        activeRunId.current = null;
+      }
+    }, POLL_TIMEOUT_MS);
   }
 
-  async function startRerunPolling() {
-    const updated = await scraperApi.getPageDetail(Number(id));
-    setDetail(updated);
-    startTime.current = Date.now();
-    setElapsed(0);
-    setRerunActive(true);
-  }
+  useEffect(() => () => { if (pollTimer.current) clearInterval(pollTimer.current); }, []);
 
-  async function handleRerun() {
+  async function triggerRun(apiCall: () => Promise<{ run_id: string }>) {
     if (!id || rerunning) return;
     setRerunning(true);
     try {
-      await scraperApi.rerunPage(Number(id));
-      await startRerunPolling();
+      const { run_id } = await apiCall();
+      // Add optimistic placeholder so the card appears immediately
+      const placeholder: RerunJob = {
+        run_id,
+        page_id: Number(id),
+        status: "running",
+        steps: [
+          { key: "content", label: "正文准备", status: "pending", detail: "", duration_ms: null },
+          { key: "extract", label: "LLM 提取",  status: "pending", detail: "", duration_ms: null },
+          { key: "save",    label: "保存结果",   status: "pending", detail: "", duration_ms: null },
+        ],
+        created_at: new Date().toISOString(),
+        finished_at: null,
+        elapsed_ms: 0,
+        error: null,
+      };
+      setRuns((prev) => [placeholder, ...prev]);
+      startPolling(run_id);
     } catch (e) {
-      alert(`Re-run failed: ${e}`);
+      alert(`操作失败: ${e}`);
     } finally {
       setRerunning(false);
     }
   }
 
-  async function handleManualContent(text: string) {
-    if (!id) return;
-    await scraperApi.setPageContent(Number(id), text);
-    await startRerunPolling();
+  function handleRerun() {
+    return triggerRun(() => scraperApi.rerunPage(Number(id!)));
   }
 
-  function dismissRerun() {
-    stopPolling();
-    setRerunActive(false);
+  async function handleManualContent(text: string) {
+    await triggerRun(() => scraperApi.setPageContent(Number(id!), text));
   }
 
   if (loading) return <div className="flex-1 flex items-center justify-center text-ghost">Loading…</div>;
@@ -355,7 +348,7 @@ export default function ScraperPageDetail() {
         </div>
         <button
           onClick={handleRerun}
-          disabled={rerunning || rerunActive}
+          disabled={rerunning}
           title="Reset to pending_extract and re-run extraction"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-rim text-ghost hover:text-soft hover:bg-elevated text-xs transition-colors disabled:opacity-40"
         >
@@ -365,25 +358,23 @@ export default function ScraperPageDetail() {
       </div>
 
       {/* Manual content input — always available; orange mode when fetch was blocked */}
-      {!rerunActive && (
-        <Section
-          title={detail.status === "needs_content" ? "⚠ 手工提供正文" : "替换正文"}
-          defaultOpen={detail.status === "needs_content"}
-        >
-          <ManualContentInput
-            blocked={detail.status === "needs_content"}
-            onSubmit={handleManualContent}
-          />
-        </Section>
-      )}
-
-      {/* Re-run status block — appears after clicking Re-run or submitting manual content */}
-      {rerunActive && (
-        <RerunStatusBlock
-          pageStatus={detail.status}
-          elapsed={elapsed}
-          onDismiss={dismissRerun}
+      <Section
+        title={detail.status === "needs_content" ? "⚠ 手工提供正文" : "替换正文"}
+        defaultOpen={detail.status === "needs_content"}
+      >
+        <ManualContentInput
+          blocked={detail.status === "needs_content"}
+          onSubmit={handleManualContent}
         />
+      </Section>
+
+      {/* Re-run history — one card per run, newest first */}
+      {runs.length > 0 && (
+        <div className="space-y-2">
+          {runs.map((job, i) => (
+            <RunCard key={job.run_id} job={job} defaultOpen={i === 0} />
+          ))}
+        </div>
       )}
 
       {/* 1. Raw content preview */}

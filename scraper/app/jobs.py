@@ -87,6 +87,29 @@ async def run_extract_single(page_id: int):
             logger.error("[rerun] Extraction failed for page %d: %s", page_id, e)
 
 
+async def run_extract_single_with_job(page_id: int, job):
+    """Extract a single page and report per-step progress into *job*."""
+    from datetime import datetime as _dt
+    from app.services.extractor import extract_single_page
+    logger.info("[rerun] Extracting page %d (job %s)", page_id, job.run_id)
+
+    async with AsyncSessionLocal() as session:
+        try:
+            await extract_single_page(session, page_id, job=job)
+            logger.info("[rerun] Done for page %d (job %s)", page_id, job.run_id)
+        except Exception as e:
+            logger.error("[rerun] Extraction failed for page %d: %s", page_id, e)
+            job.status = "error"
+            job.error = str(e)
+            job.finished_at = _dt.utcnow()
+            # Mark any still-running step as error
+            for step in job.steps:
+                if step.status in ("pending", "running"):
+                    step.status = "error"
+                    step.detail = str(e)
+                    step.finished_at = _dt.utcnow()
+
+
 async def run_update():
     """Re-fetch partial/tba events and check for content updates."""
     logger.info("[update] Starting incremental update job")
