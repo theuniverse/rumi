@@ -56,6 +56,20 @@ export async function submitPageContent(pageId, content) {
 }
 
 /**
+ * Permanently dismiss a page from the needs_content queue.
+ * Sets status to done-skipped in the scraper DB so it never reappears.
+ * @param {number} pageId
+ * @returns {{ ok: boolean, page_id: number, status: string }}
+ */
+export async function skipPage(pageId) {
+  const base = await apiBase();
+  const url = `${base}/audit/pages/${pageId}/skip`;
+  const res = await fetch(url, { method: "POST" });
+  if (!res.ok) throw new Error(`POST /audit/pages/${pageId}/skip → ${res.status}`);
+  return res.json();
+}
+
+/**
  * Poll a rerun job's progress.
  * @param {number} pageId
  * @param {string} runId

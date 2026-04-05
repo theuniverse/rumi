@@ -10,6 +10,7 @@ import {
   fetchNeedsContentPages,
   submitPageContent,
   getRerun,
+  skipPage,
 } from "./api.js";
 
 // ---------------------------------------------------------------------------
@@ -301,6 +302,9 @@ chrome.runtime.onMessage.addListener(async (msg, _sender, sendResponse) => {
   }
 
   if (msg.type === "DISMISS_JOB") {
+    // Tell the scraper to move this page out of needs_content permanently,
+    // so it doesn't reappear on the next poll.
+    skipPage(msg.pageId).catch(() => {}); // best-effort; don't block the response
     activeJobs.delete(msg.pageId);
     sendResponse({ ok: true });
     return true;

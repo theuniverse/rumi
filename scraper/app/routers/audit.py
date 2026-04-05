@@ -272,6 +272,22 @@ async def rerun_page(
     return {"ok": True, "page_id": page_id, "run_id": job.run_id, "status": "pending_extract"}
 
 
+@router.post("/audit/pages/{page_id}/skip")
+async def skip_page(page_id: int, db: AsyncSession = Depends(get_db)):
+    """Mark a page as done-skipped so it leaves the needs_content queue permanently.
+
+    Used by the rumi-cuckoo extension when an article's content is too short
+    or otherwise unprocessable and the user wants to dismiss it forever.
+    """
+    from fastapi import HTTPException
+    page = (await db.execute(select(ScrapedPage).where(ScrapedPage.id == page_id))).scalar_one_or_none()
+    if not page:
+        raise HTTPException(status_code=404, detail="Page not found")
+    page.status = PageStatus.done
+    await db.commit()
+    return {"ok": True, "page_id": page_id, "status": "done"}
+
+
 @router.get("/audit/pages/{page_id}/reruns")
 async def list_reruns(page_id: int, db: AsyncSession = Depends(get_db)):
     """Return all tracked re-run jobs for a page (newest first)."""

@@ -514,7 +514,7 @@ export default function People() {
   useEffect(() => { load(); }, []);
 
   return (
-    <div className="max-w-3xl mx-auto px-8 py-16">
+    <div className="max-w-3xl mx-auto px-4 sm:px-8 py-16">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
@@ -532,6 +532,8 @@ export default function People() {
 
       {/* Table */}
       <div className="rounded-lg border border-rim overflow-hidden">
+        <div className="overflow-x-auto">
+        <div className="min-w-[640px]">
         {/* Column headers */}
         <div className="flex items-center gap-3 px-4 py-2.5 bg-surface border-b border-rim text-xs text-faint uppercase tracking-wider">
           <span className="w-40 shrink-0">Name & Type</span>
@@ -578,6 +580,8 @@ export default function People() {
             />
           ))
         )}
+        </div>
+        </div>
       </div>
 
       {people.length > 0 && (

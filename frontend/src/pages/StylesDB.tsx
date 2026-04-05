@@ -257,7 +257,7 @@ export default function StylesDB() {
   useEffect(() => { load(); }, []);
 
   return (
-    <div className="max-w-2xl mx-auto px-8 py-16">
+    <div className="max-w-2xl mx-auto px-4 sm:px-8 py-16">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
@@ -275,6 +275,8 @@ export default function StylesDB() {
 
       {/* Table */}
       <div className="rounded-lg border border-rim overflow-hidden">
+        <div className="overflow-x-auto">
+        <div className="min-w-[360px]">
         {/* Column headers */}
         <div className="flex items-center gap-2 px-4 py-2.5 bg-surface border-b border-rim text-xs text-faint uppercase tracking-wider">
           <span className="w-4 shrink-0" />
@@ -318,6 +320,8 @@ export default function StylesDB() {
             />
           ))
         )}
+        </div>
+        </div>
       </div>
 
       <p className="mt-4 text-xs text-faint">
