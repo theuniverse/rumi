@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "Rumi Cuckoo",
+  "version": "1.0.0",
+  "description": "Auto-extracts WeChat article content for the Rumi scraper pipeline",
+
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://mp.weixin.qq.com/s/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "Rumi Cuckoo"
+  },
+
+  "permissions": [
+    "tabs",
+    "storage",
+    "alarms"
+  ],
+
+  "host_permissions": [
+    "https://mp.weixin.qq.com/s/*",
+    "http://localhost:8888/*",
+    "https://rumi.website/*"
+  ],
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

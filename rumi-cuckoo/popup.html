@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rumi Cuckoo</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <img class="header-icon" src="icons/icon48.png" alt="" />
+      <span class="header-title">Rumi Cuckoo</span>
+      <span class="badge zero" id="badge">0</span>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="btn-refresh" title="刷新队列">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <label class="auto-toggle">
+      <span class="toggle">
+        <input type="checkbox" id="toggle-auto" />
+        <span class="toggle-track"></span>
+        <span class="toggle-thumb"></span>
+      </span>
+      自动处理
+    </label>
+  </div>
+
+  <!-- API error banner (hidden by default) -->
+  <div class="api-error" id="api-error" style="display:none"></div>
+
+  <!-- Queue -->
+  <div class="queue" id="queue">
+    <div class="queue-empty" id="queue-empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M9 12l2 2 4-4M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>暂无待处理页面</span>
+    </div>
+  </div>
+
+  <!-- Settings toggle -->
+  <div class="settings-toggle">
+    <button class="settings-toggle-btn" id="btn-settings-toggle">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      设置
+    </button>
+  </div>
+
+  <!-- Settings panel (hidden by default) -->
+  <div class="settings-panel" id="settings-panel" style="display:none">
+    <div class="field">
+      <label>API 地址</label>
+      <input type="text" id="setting-api-base" placeholder="http://localhost:8888/scraper-api" />
+    </div>
+    <div class="field">
+      <label>轮询间隔（分钟）</label>
+      <input type="number" id="setting-poll-interval" min="1" max="60" value="2" />
+    </div>
+    <div class="field-row">
+      <span>提取后关闭标签页</span>
+      <label class="toggle">
+        <input type="checkbox" id="setting-close-tab" checked />
+        <span class="toggle-track"></span>
+        <span class="toggle-thumb"></span>
+      </label>
+    </div>
+    <div class="save-row">
+      <button class="btn-save" id="btn-save-settings">保存</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
