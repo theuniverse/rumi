@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Pencil, Trash2, Check, X, Users, Instagram, ExternalLink, Star } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, Users, Instagram, ExternalLink, Star, Link2 } from "lucide-react";
 import clsx from "clsx";
 import { Tag, Person, PersonType, getTags, getPeople, createPerson, updatePerson, deletePerson, setPersonTags, setPersonFollowed } from "../lib/api";
+import { setPersonScraperLink } from "../lib/db";
+import { scraperApi, type RefArtist } from "../lib/scraper-api";
 
-type PersonWithTags = Person & { tags: Tag[] };
+type PersonWithTags = Person & { tags: Tag[]; scraper_artist_id?: number | null };
 
 // ── Person type badge ────────────────────────────────────────────────────────
 function PersonTypeBadge({ type }: { type: PersonType }) {
@@ -88,6 +90,109 @@ function TagPicker({
   );
 }
 
+// ── Scraper Artist Selector ───────────────────────────────────────────────────
+function ScraperArtistSelector({
+  value,
+  onChange,
+  personName,
+}: {
+  value: number | null | undefined;
+  onChange: (artistId: number | null) => void;
+  personName?: string;
+}) {
+  const [artists, setArtists] = useState<RefArtist[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [suggestions, setSuggestions] = useState<RefArtist[]>([]);
+
+  const loadArtists = async () => {
+    if (loaded) return;
+    setLoading(true);
+    try {
+      const { items } = await scraperApi.getRefArtists();
+      setArtists(items);
+      setLoaded(true);
+
+      // Find suggestions based on name similarity
+      if (personName && !value) {
+        const nameLower = personName.toLowerCase().trim();
+        const matches = items.filter(artist => {
+          const artistNameLower = artist.name.toLowerCase();
+          return artistNameLower.includes(nameLower) || nameLower.includes(artistNameLower);
+        }).slice(0, 3);
+        setSuggestions(matches);
+      }
+    } catch (error) {
+      console.error('Failed to load artists:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selectedArtist = artists.find(a => a.id === value);
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <Link2 size={12} className="text-faint" />
+        <span className="text-xs text-ghost">Link to Scraper</span>
+      </div>
+
+      {selectedArtist && (
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-soft">Linked to: {selectedArtist.name}</span>
+          <button
+            onClick={() => onChange(null)}
+            className="text-faint hover:text-red-400 transition-colors"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* Smart suggestions */}
+      {!value && suggestions.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[10px] text-faint">Suggested matches:</p>
+          <div className="flex flex-wrap gap-1">
+            {suggestions.map(artist => (
+              <button
+                key={artist.id}
+                onClick={() => onChange(artist.id)}
+                className="px-2 py-0.5 rounded text-[10px] border border-blue-400/30 text-blue-400 bg-blue-400/5 hover:bg-blue-400/10 transition-colors"
+              >
+                {artist.name} {artist.city ? `(${artist.city})` : ''}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <select
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value ? parseInt(e.target.value) : null)}
+        onFocus={loadArtists}
+        disabled={loading}
+        className="w-full px-2 py-1 rounded bg-surface border border-rim text-soft text-xs focus:outline-none focus:border-muted disabled:opacity-50"
+      >
+        <option value="">-- Select Artist --</option>
+        {loading && <option value="">Loading...</option>}
+        {artists.map(artist => (
+          <option key={artist.id} value={artist.id}>
+            {artist.name} {artist.city ? `(${artist.city})` : ''}
+          </option>
+        ))}
+      </select>
+
+      {value && (
+        <p className="text-[10px] text-faint">
+          Events featuring this artist will appear in recommendations
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ── Inline-editable person row ────────────────────────────────────────────────
 function PersonRow({
   person,
@@ -109,6 +214,7 @@ function PersonRow({
   const [bio, setBio] = useState(person.bio ?? "");
   const [tagIds, setTagIds] = useState<Set<number>>(new Set(person.tags.map((t) => t.id)));
   const [followed, setFollowed] = useState((person as Person & { followed?: number }).followed === 1);
+  const [scraperArtistId, setScraperArtistId] = useState<number | null | undefined>(person.scraper_artist_id);
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -133,6 +239,7 @@ function PersonRow({
       bio: bio.trim() || null,
     });
     await setPersonTags(person.id, Array.from(tagIds));
+    await setPersonScraperLink(person.id, scraperArtistId ?? null);
     setEditing(false);
     onUpdated();
   };
@@ -145,6 +252,7 @@ function PersonRow({
     setRaUrl(person.ra_url ?? "");
     setBio(person.bio ?? "");
     setTagIds(new Set(person.tags.map((t) => t.id)));
+    setScraperArtistId(person.scraper_artist_id);
     setEditing(false);
   };
 
@@ -331,6 +439,15 @@ function PersonRow({
               placeholder="Bio or notes (optional)"
               rows={2}
               className="w-full px-2 py-1 rounded bg-surface border border-rim text-soft text-xs focus:outline-none focus:border-muted placeholder:text-faint resize-none"
+            />
+          </div>
+
+          {/* Scraper Link */}
+          <div>
+            <ScraperArtistSelector
+              value={scraperArtistId}
+              onChange={setScraperArtistId}
+              personName={name}
             />
           </div>
 

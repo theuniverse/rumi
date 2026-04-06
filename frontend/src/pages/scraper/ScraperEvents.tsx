@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, ChevronLeft } from "lucide-react";
+import { ChevronRight, ChevronLeft, RefreshCw } from "lucide-react";
 import clsx from "clsx";
 import { scraperApi, ExtractedEventSummary } from "../../lib/scraper-api";
 
@@ -48,6 +48,7 @@ export default function ScraperEvents() {
   const [events, setEvents]   = useState<ExtractedEventSummary[]>([]);
   const [total, setTotal]     = useState(0);
   const [loading, setLoading] = useState(true);
+  const [rematching, setRematching] = useState(false);
   const [error, setError]     = useState<string | null>(null);
 
   const [filterStatus, setFilterStatus] = useState("");
@@ -71,6 +72,27 @@ export default function ScraperEvents() {
     }
   }
 
+  async function rematchAll() {
+    if (!confirm('Re-match all events? This will update artist/venue matches for all events.')) {
+      return;
+    }
+
+    setRematching(true);
+    try {
+      const result = await scraperApi.rematchAllEvents({
+        status_filter: filterStatus || undefined,
+        limit: 100
+      });
+      alert(`Rematch complete!\nMatched: ${result.matched_count}/${result.total_events} events\nErrors: ${result.errors.length}`);
+      // Reload events to see updated data
+      await load();
+    } catch (e) {
+      alert(`Rematch failed: ${e}`);
+    } finally {
+      setRematching(false);
+    }
+  }
+
   useEffect(() => { setOffset(0); }, [filterStatus]);
   useEffect(() => { load(); }, [filterStatus, offset]);
 
@@ -84,6 +106,14 @@ export default function ScraperEvents() {
           <h1 className="text-soft text-lg font-semibold">Extracted Events</h1>
           <p className="text-ghost text-sm">{total} events parsed by LLM</p>
         </div>
+        <button
+          onClick={rematchAll}
+          disabled={rematching || loading}
+          className="flex items-center gap-2 px-3 py-1.5 rounded border border-rim text-ghost text-xs hover:text-soft hover:border-muted transition-colors disabled:opacity-50"
+        >
+          <RefreshCw size={12} className={rematching ? "animate-spin" : ""} />
+          {rematching ? 'Rematching...' : 'Rematch All'}
+        </button>
       </div>
 
       {error && (

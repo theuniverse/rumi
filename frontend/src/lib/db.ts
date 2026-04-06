@@ -252,6 +252,16 @@ function _applySchema(db: Database): void {
   try { _db!.run("ALTER TABLE venues ADD COLUMN followed INTEGER NOT NULL DEFAULT 0"); } catch {}
   try { _db!.run("ALTER TABLE people ADD COLUMN followed INTEGER NOT NULL DEFAULT 0"); } catch {}
   try { _db!.run("ALTER TABLE sessions ADD COLUMN event_id INTEGER REFERENCES events(id)"); } catch {}
+
+  // ── Scraper Integration Migrations (Phase 1) ──────────────────────────────
+  // Add scraper reference IDs for entity linking
+  try { _db!.run("ALTER TABLE people ADD COLUMN scraper_artist_id INTEGER"); } catch {}
+  try { _db!.run("ALTER TABLE venues ADD COLUMN scraper_venue_id INTEGER"); } catch {}
+  try { _db!.run("ALTER TABLE labels ADD COLUMN scraper_label_id INTEGER"); } catch {}
+
+  // Add event source tracking and scraper event ID for deduplication
+  try { _db!.run("ALTER TABLE events ADD COLUMN source TEXT DEFAULT 'manual' CHECK(source IN ('manual', 'scraper', 'ra_sync'))"); } catch {}
+  try { _db!.run("ALTER TABLE events ADD COLUMN scraper_event_id INTEGER"); } catch {}
 }
 
 // ── Default tag seed ──────────────────────────────────────────────────────────
@@ -637,7 +647,44 @@ export async function updatePerson(
 
 export async function deletePerson(id: number): Promise<void> {
   run("DELETE FROM people WHERE id = ?", [id]);
+}
+
+// ── Scraper Integration Helpers ──────────────────────────────────────────────
+
+export async function setPersonFollowed(id: number, followed: boolean): Promise<void> {
+  run("UPDATE people SET followed = ? WHERE id = ?", [followed ? 1 : 0, id]);
   await _persist();
+}
+
+export async function setPersonScraperLink(id: number, scraperArtistId: number | null): Promise<void> {
+  run("UPDATE people SET scraper_artist_id = ? WHERE id = ?", [scraperArtistId, id]);
+  await _persist();
+}
+
+export async function getFollowedPeople(): Promise<Person[]> {
+  const people = query<Person>("SELECT * FROM people WHERE followed = 1 ORDER BY name");
+  // Populate tags
+  type PT = { person_id: number } & Omit<Tag, 'children'>;
+  const rows = query<PT>(`
+    SELECT pt.person_id, t.id, t.name, t.color, t.slug, t.parent_id,
+           t.description, t.bpm_min, t.bpm_max, t.created_at
+    FROM person_tags pt JOIN tags t ON t.id = pt.tag_id
+    WHERE pt.person_id IN (SELECT id FROM people WHERE followed = 1)
+    ORDER BY t.name
+  `);
+  const byPerson = new Map<number, Tag[]>();
+  for (const { person_id, ...t } of rows) {
+    if (!byPerson.has(person_id)) byPerson.set(person_id, []);
+    byPerson.get(person_id)!.push({ ...t, children: [] });
+  }
+  return people.map((p) => ({ ...p, tags: byPerson.get(p.id) ?? [] }));
+}
+
+export async function getFollowedPeopleWithScraperIds(): Promise<Array<Person & { scraper_artist_id: number }>> {
+  const people = query<Person & { scraper_artist_id: number }>(
+    "SELECT * FROM people WHERE followed = 1 AND scraper_artist_id IS NOT NULL ORDER BY name"
+  );
+  return people;
 }
 
 export async function setPersonTags(personId: number, tagIds: number[]): Promise<void> {
@@ -729,9 +776,35 @@ export async function setVenueFollowed(id: number, followed: boolean): Promise<v
   await _persist();
 }
 
-export async function setPersonFollowed(id: number, followed: boolean): Promise<void> {
-  run("UPDATE people SET followed = ? WHERE id = ?", [followed ? 1 : 0, id]);
+export async function setVenueScraperLink(id: number, scraperVenueId: number | null): Promise<void> {
+  run("UPDATE venues SET scraper_venue_id = ? WHERE id = ?", [scraperVenueId, id]);
   await _persist();
+}
+
+export async function getFollowedVenues(): Promise<Place[]> {
+  const venues = query<Place>("SELECT * FROM venues WHERE followed = 1 ORDER BY name");
+  // Populate tags
+  type VT = { venue_id: number } & Omit<Tag, 'children'>;
+  const rows = query<VT>(`
+    SELECT vt.venue_id, t.id, t.name, t.color, t.slug, t.parent_id,
+           t.description, t.bpm_min, t.bpm_max, t.created_at
+    FROM venue_tags vt JOIN tags t ON t.id = vt.tag_id
+    WHERE vt.venue_id IN (SELECT id FROM venues WHERE followed = 1)
+    ORDER BY t.name
+  `);
+  const byVenue = new Map<number, Tag[]>();
+  for (const { venue_id, ...t } of rows) {
+    if (!byVenue.has(venue_id)) byVenue.set(venue_id, []);
+    byVenue.get(venue_id)!.push({ ...t, children: [] });
+  }
+  return venues.map((v) => ({ ...v, tags: byVenue.get(v.id) ?? [] }));
+}
+
+export async function getFollowedVenuesWithScraperIds(): Promise<Array<Place & { scraper_venue_id: number }>> {
+  const venues = query<Place & { scraper_venue_id: number }>(
+    "SELECT * FROM venues WHERE followed = 1 AND scraper_venue_id IS NOT NULL ORDER BY name"
+  );
+  return venues;
 }
 
 export async function getFollowedEntities(): Promise<{
@@ -793,30 +866,57 @@ export async function saveEvent(input: RAEventRaw, resolvedVenueId?: number | nu
 }
 
 /**
- * Save a scraper-matched event into the local Rumi events table.
- * Uses a synthetic ra_event_id prefixed with "scraper_" for dedup.
+ * Check if a scraper event is already in My Events
  */
-export async function saveScraperEvent(scraperEvent: {
+export function isScraperEventAdded(scraperEventId: number): boolean {
+  const existing = query<{ id: number }>(
+    "SELECT id FROM events WHERE scraper_event_id = ?",
+    [scraperEventId]
+  );
+  return existing.length > 0;
+}
+
+/**
+ * Save a scraper-recommended event into the local Rumi events table.
+ * Uses scraper_event_id for deduplication.
+ */
+export async function addScraperEventToMyEvents(scraperEvent: {
   id: number;
   event_name: string | null;
   event_date: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
   venue: string | null;
-  city: string | null;
+  ref_venue_id?: number | null;
   timetable_slots: { artists: string[]; start_time: string | null; end_time: string | null }[];
-}): Promise<void> {
-  const syntheticRaId = `scraper_${scraperEvent.id}`;
-  const existing = query<{ id: number }>("SELECT id FROM events WHERE ra_event_id = ?", [syntheticRaId]);
-  if (existing.length > 0) return; // already imported
+}): Promise<number> {
+  // Check if already added
+  if (isScraperEventAdded(scraperEvent.id)) {
+    const existing = query<{ id: number }>(
+      "SELECT id FROM events WHERE scraper_event_id = ?",
+      [scraperEvent.id]
+    );
+    return existing[0].id;
+  }
 
+  // Insert event with source='scraper' and scraper_event_id
   run(
-    `INSERT INTO events (ra_event_id, title, venue_name, date, start_time, end_time, status)
-     VALUES (?,?,?,?,?,?,?)`,
-    [syntheticRaId, scraperEvent.event_name, scraperEvent.venue,
-     scraperEvent.event_date, null, null, "interested"]
+    `INSERT INTO events (title, venue_name, date, start_time, end_time, status, source, scraper_event_id)
+     VALUES (?,?,?,?,?,?,?,?)`,
+    [
+      scraperEvent.event_name,
+      scraperEvent.venue,
+      scraperEvent.event_date,
+      scraperEvent.start_time ?? null,
+      scraperEvent.end_time ?? null,
+      "interested",
+      "scraper",
+      scraperEvent.id
+    ]
   );
   const eventId = lastInsertRowid();
 
-  // Flatten all artists from timetable slots into lineup
+  // Add lineup from timetable slots
   const seen = new Set<string>();
   for (const slot of scraperEvent.timetable_slots ?? []) {
     for (const name of slot.artists ?? []) {
@@ -830,6 +930,7 @@ export async function saveScraperEvent(scraperEvent: {
   }
 
   await _persist();
+  return eventId;
 }
 
 export async function updateEventStatus(id: number, status: EventStatus): Promise<void> {

@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Pencil, Trash2, Check, X, MapPin, Calendar, Navigation, Star } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, MapPin, Calendar, Navigation, Star, Link2 } from "lucide-react";
 import clsx from "clsx";
 import { Tag, Place, PlaceType, getTags, getPlaces, createPlace, updatePlace, deletePlace, setPlaceTags, setVenueFollowed } from "../lib/api";
 import { getCurrentLocation } from "../lib/location";
+import { setVenueScraperLink } from "../lib/db";
+import { scraperApi, type RefVenue } from "../lib/scraper-api";
 
-type PlaceWithCount = Place & { session_count: number; tags: Tag[] };
+type PlaceWithCount = Place & { session_count: number; tags: Tag[]; scraper_venue_id?: number | null };
 
 // ── Place type badge ──────────────────────────────────────────────────────────
 function PlaceTypeBadge({ type }: { type: PlaceType }) {
@@ -87,6 +89,109 @@ function TagPicker({
   );
 }
 
+// ── Scraper Venue Selector ────────────────────────────────────────────────────
+function ScraperVenueSelector({
+  value,
+  onChange,
+  placeName,
+}: {
+  value: number | null | undefined;
+  onChange: (venueId: number | null) => void;
+  placeName?: string;
+}) {
+  const [venues, setVenues] = useState<RefVenue[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [suggestions, setSuggestions] = useState<RefVenue[]>([]);
+
+  const loadVenues = async () => {
+    if (loaded) return;
+    setLoading(true);
+    try {
+      const { items } = await scraperApi.getRefVenues();
+      setVenues(items);
+      setLoaded(true);
+
+      // Find suggestions based on name similarity
+      if (placeName && !value) {
+        const nameLower = placeName.toLowerCase().trim();
+        const matches = items.filter(venue => {
+          const venueNameLower = venue.name.toLowerCase();
+          return venueNameLower.includes(nameLower) || nameLower.includes(venueNameLower);
+        }).slice(0, 3);
+        setSuggestions(matches);
+      }
+    } catch (error) {
+      console.error('Failed to load venues:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selectedVenue = venues.find(v => v.id === value);
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <Link2 size={12} className="text-faint" />
+        <span className="text-xs text-ghost">Link to Scraper</span>
+      </div>
+
+      {selectedVenue && (
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-soft">Linked to: {selectedVenue.name}</span>
+          <button
+            onClick={() => onChange(null)}
+            className="text-faint hover:text-red-400 transition-colors"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* Smart suggestions */}
+      {!value && suggestions.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[10px] text-faint">Suggested matches:</p>
+          <div className="flex flex-wrap gap-1">
+            {suggestions.map(venue => (
+              <button
+                key={venue.id}
+                onClick={() => onChange(venue.id)}
+                className="px-2 py-0.5 rounded text-[10px] border border-purple-400/30 text-purple-400 bg-purple-400/5 hover:bg-purple-400/10 transition-colors"
+              >
+                {venue.name} {venue.city ? `(${venue.city})` : ''}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <select
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value ? parseInt(e.target.value) : null)}
+        onFocus={loadVenues}
+        disabled={loading}
+        className="w-full px-2 py-1 rounded bg-surface border border-rim text-soft text-xs focus:outline-none focus:border-muted disabled:opacity-50"
+      >
+        <option value="">-- Select Venue --</option>
+        {loading && <option value="">Loading...</option>}
+        {venues.map(venue => (
+          <option key={venue.id} value={venue.id}>
+            {venue.name} {venue.city ? `(${venue.city})` : ''}
+          </option>
+        ))}
+      </select>
+
+      {value && (
+        <p className="text-[10px] text-faint">
+          Events at this venue will appear in recommendations
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ── Inline-editable place row ─────────────────────────────────────────────────
 function PlaceRow({
   place,
@@ -106,6 +211,7 @@ function PlaceRow({
   const [latitude, setLatitude] = useState<string>(place.latitude?.toString() ?? "");
   const [longitude, setLongitude] = useState<string>(place.longitude?.toString() ?? "");
   const [followed, setFollowed] = useState((place as Place & { followed?: number }).followed === 1);
+  const [scraperVenueId, setScraperVenueId] = useState<number | null | undefined>(place.scraper_venue_id);
   const [tagIds, setTagIds]   = useState<Set<number>>(new Set(place.tags.map((t) => t.id)));
   const [gettingLocation, setGettingLocation] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -134,6 +240,12 @@ function PlaceRow({
       longitude: lng,
     });
     await setPlaceTags(place.id, [...tagIds]);
+
+    // Save scraper venue link
+    if (scraperVenueId !== place.scraper_venue_id) {
+      await setVenueScraperLink(place.id, scraperVenueId ?? null);
+    }
+
     setEditing(false);
     onUpdated();
   };
@@ -154,6 +266,7 @@ function PlaceRow({
     setAddress(place.address ?? "");
     setLatitude(place.latitude?.toString() ?? "");
     setLongitude(place.longitude?.toString() ?? "");
+    setScraperVenueId(place.scraper_venue_id);
     setTagIds(new Set(place.tags.map((t) => t.id)));
     setEditing(false);
   };
@@ -328,6 +441,15 @@ function PlaceRow({
                 {latitude && longitude ? `📍 ${parseFloat(latitude).toFixed(4)}, ${parseFloat(longitude).toFixed(4)}` : "Enter both latitude and longitude"}
               </p>
             )}
+          </div>
+
+          {/* Scraper Link */}
+          <div>
+            <ScraperVenueSelector
+              value={scraperVenueId}
+              onChange={setScraperVenueId}
+              placeName={name}
+            />
           </div>
 
           {/* Tags */}

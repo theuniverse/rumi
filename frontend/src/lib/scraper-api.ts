@@ -12,9 +12,13 @@ async function get<T>(path: string, params?: Record<string, string | number | un
       if (v !== undefined) url.searchParams.set(k, String(v));
     }
   }
+  console.log('[scraper-api] GET', url.toString());
   const res = await fetch(url.toString());
+  console.log('[scraper-api] Response status:', res.status);
   if (!res.ok) throw new Error(`GET ${path} → ${res.status}`);
-  return res.json();
+  const data = await res.json();
+  console.log('[scraper-api] Response data:', data);
+  return data;
 }
 
 async function post<T>(path: string, body?: unknown): Promise<T> {
@@ -293,6 +297,24 @@ export interface MatchedEvent extends ExtractedEventSummary {
   timetable_slots: TimetableSlot[];
 }
 
+export interface RecommendedEvent {
+  id: number;
+  event_name: string | null;
+  event_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  venue: string | null;
+  ref_venue_id: number | null;
+  city: string | null;
+  info_level: number;
+  status: string;
+  confidence: number;
+  matched_artists?: EntityMatch[];  // Only for events-by-artists
+  entity_matches: EntityMatch[];
+  timetable_slots: TimetableSlot[];
+  created_at: string;
+}
+
 // ── API functions ─────────────────────────────────────────────────────────────
 
 export const scraperApi = {
@@ -379,6 +401,54 @@ export const scraperApi = {
   markEventPushed: (id: number) =>
     post<{ ok: boolean }>(`/refdata/matched-events/${id}/mark-pushed`),
 
+  // ── Event Recommendations ──────────────────────────────────────────────
+
+  getEventsByArtists: (artistIds: number[], params?: {
+    date_from?: string;
+    date_to?: string;
+    limit?: number;
+  }) =>
+    get<{ items: RecommendedEvent[]; total: number }>(
+      "/refdata/events-by-artists",
+      { artist_ids: artistIds.join(','), ...params } as Record<string, string | number>
+    ),
+
+  getEventsByVenues: (venueIds: number[], params?: {
+    date_from?: string;
+    date_to?: string;
+    limit?: number;
+  }) =>
+    get<{ items: RecommendedEvent[]; total: number }>(
+      "/refdata/events-by-venues",
+      { venue_ids: venueIds.join(','), ...params } as Record<string, string | number>
+    ),
+
   getRefDataVersion: () =>
     get<{ version: string | null }>("/refdata/version"),
+
+  // ── Rematch Events ──────────────────────────────────────────────────────
+
+  rematchEvent: (eventId: number) =>
+    post<{
+      status: string;
+      event_id: number;
+      matches_count: number;
+      matches: Array<{
+        entity_type: string;
+        entity_id: number;
+        raw_name: string;
+        confidence: number;
+      }>;
+    }>(`/refdata/rematch-event/${eventId}`),
+
+  rematchAllEvents: (params?: {
+    status_filter?: string;
+    limit?: number;
+  }) =>
+    post<{
+      status: string;
+      total_events: number;
+      matched_count: number;
+      errors: Array<{ event_id: number; error: string }>;
+    }>("/refdata/rematch-all-events", params),
 };

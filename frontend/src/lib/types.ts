@@ -27,6 +27,8 @@ export interface Place {
   ra_id: string | null;
   amap_id: string | null;
   source: string | null;
+  followed?: number;              // 0 | 1 - for event recommendations
+  scraper_venue_id?: number | null; // Link to scraper RefVenue
   created_at: string;
   /** Populated when fetched via getPlaces() */
   tags?: Tag[];
@@ -49,6 +51,7 @@ export interface Label {
   ra_id: string | null;       // RA slug for event fetching
   bio: string | null;
   followed: number;           // 0 | 1
+  scraper_label_id?: number | null; // Link to scraper RefLabel
   created_at: string;
   /** Populated when fetched via getLabels() */
   tags?: Tag[];
@@ -62,6 +65,8 @@ export interface Person {
   instagram: string | null;   // handle only, e.g. "djname" (no @)
   ra_url: string | null;      // full Resident Advisor profile URL
   bio: string | null;
+  followed?: number;              // 0 | 1 - for event recommendations
+  scraper_artist_id?: number | null; // Link to scraper RefArtist
   created_at: string;
   /** Populated when fetched via getPeople() */
   tags?: Tag[];
@@ -109,6 +114,7 @@ export interface AnalysisSnapshot {
 }
 
 export type EventStatus = 'interested' | 'attended' | 'skipped';
+export type EventSource = 'manual' | 'scraper' | 'ra_sync';
 
 /** Named RumiEvent to avoid collision with the DOM Event type */
 export interface RumiEvent {
@@ -123,6 +129,8 @@ export interface RumiEvent {
   ra_url: string | null;
   flyer_url: string | null;
   status: EventStatus;
+  source?: EventSource;        // Origin of the event (manual, scraper, ra_sync)
+  scraper_event_id?: number | null; // Link to scraper ExtractedEvent for deduplication
   created_at: string;
   lineup?: EventLineupEntry[];
 }

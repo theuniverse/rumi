@@ -2,14 +2,17 @@ import asyncio
 import json
 import logging
 import os
+import re
 import struct
 import subprocess
 import tempfile
 import time
 import wave
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import librosa
@@ -28,6 +31,122 @@ OVERLAP_SECS = 4
 STORAGE_DIR = Path(__file__).parent.parent / "storage"
 
 _VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm", ".flv", ".wmv", ".3gp"}
+
+
+def _parse_gps_string(location: str) -> tuple[Optional[float], Optional[float]]:
+    """
+    Parse GPS coordinates from various formats:
+    - iPhone format: "+31.2345+121.4567/" or "+31.2345-121.4567/"
+    - Standard format: "31.2345, 121.4567"
+    Returns (latitude, longitude) or (None, None) if parsing fails
+    """
+    if not location:
+        return None, None
+
+    try:
+        # iPhone format: +31.2345+121.4567/
+        match = re.match(r'([+-]\d+\.\d+)([+-]\d+\.\d+)', location)
+        if match:
+            lat = float(match.group(1))
+            lng = float(match.group(2))
+            return lat, lng
+
+        # Standard comma-separated format
+        if ',' in location:
+            parts = location.split(',')
+            if len(parts) == 2:
+                lat = float(parts[0].strip())
+                lng = float(parts[1].strip())
+                return lat, lng
+    except (ValueError, AttributeError):
+        pass
+
+    return None, None
+
+
+def _extract_video_metadata(file_path: str) -> dict:
+    """
+    Extract metadata from video file using ffprobe.
+    Returns dict with: created_at, latitude, longitude, device, duration
+    """
+    metadata = {
+        "created_at": None,
+        "latitude": None,
+        "longitude": None,
+        "device": None,
+        "duration": None,
+    }
+
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "quiet", "-print_format", "json",
+                "-show_format", "-show_streams", file_path
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        if result.returncode != 0:
+            logger.warning(f"ffprobe failed with code {result.returncode}")
+            return metadata
+
+        data = json.loads(result.stdout)
+        format_tags = data.get("format", {}).get("tags", {})
+
+        # Extract creation time (various tag names used by different devices)
+        for key in ["creation_time", "date", "com.apple.quicktime.creationdate"]:
+            if key in format_tags:
+                try:
+                    # Parse ISO format datetime
+                    created_at = format_tags[key]
+                    # Normalize to ISO format
+                    if created_at:
+                        # Handle various datetime formats
+                        dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                        metadata["created_at"] = dt.isoformat()
+                        break
+                except (ValueError, AttributeError) as e:
+                    logger.warning(f"Failed to parse creation_time: {e}")
+
+        # Extract GPS location
+        for key in ["location", "com.apple.quicktime.location.ISO6709"]:
+            if key in format_tags:
+                lat, lng = _parse_gps_string(format_tags[key])
+                if lat is not None and lng is not None:
+                    metadata["latitude"] = lat
+                    metadata["longitude"] = lng
+                    break
+
+        # Extract device info
+        for key in ["make", "com.apple.quicktime.make"]:
+            if key in format_tags:
+                make = format_tags[key]
+                model = format_tags.get("model", format_tags.get("com.apple.quicktime.model", ""))
+                metadata["device"] = f"{make} {model}".strip() if model else make
+                break
+
+        # Extract duration
+        duration = data.get("format", {}).get("duration")
+        if duration:
+            try:
+                metadata["duration"] = float(duration)
+            except (ValueError, TypeError):
+                pass
+
+        logger.info(f"Extracted metadata: {metadata}")
+
+    except FileNotFoundError:
+        logger.warning("ffprobe not found, metadata extraction skipped")
+    except subprocess.TimeoutExpired:
+        logger.warning("ffprobe timeout, metadata extraction skipped")
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse ffprobe output: {e}")
+    except Exception as e:
+        logger.warning(f"Unexpected error extracting metadata: {e}")
+
+    return metadata
 
 
 def _extract_audio_if_video(content: bytes, original_name: str) -> tuple[bytes, str, str | None]:
@@ -183,16 +302,35 @@ async def analyze_stream(websocket: WebSocket):
 @router.post("/api/analyze/file")
 async def analyze_file(file: UploadFile = File(...)):
     """
-    Analyze an uploaded audio file and return BPM + genre hint.
+    Analyze an uploaded audio/video file and return BPM + genre hint + metadata.
     Also saves the file to storage/uploads/ for later playback.
 
-    Accepts: .wav, .mp3, .mp4, .m4a, .flac, .ogg
-    Returns: { "bpm", "genre_hint", "confidence", "stability", "audio_url" }
+    Accepts: .wav, .mp3, .mp4, .m4a, .flac, .ogg, .mov, etc.
+    Returns: {
+        "bpm", "genre_hint", "confidence", "stability", "audio_url",
+        "metadata": { "created_at", "latitude", "longitude", "device", "duration" }
+    }
     """
     try:
         content = await file.read()
         original_name = file.filename or "upload.bin"
         loop = asyncio.get_running_loop()
+
+        # Extract metadata from video file before processing
+        metadata: dict = {}
+        ext = Path(original_name).suffix.lower()
+        if ext in _VIDEO_EXTENSIONS:
+            # Save to temp file for metadata extraction
+            tmp_for_metadata = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+            try:
+                tmp_for_metadata.write(content)
+                tmp_for_metadata.close()
+                metadata = await loop.run_in_executor(
+                    _executor, _extract_video_metadata, tmp_for_metadata.name
+                )
+            finally:
+                if os.path.exists(tmp_for_metadata.name):
+                    os.unlink(tmp_for_metadata.name)
 
         # Extract audio track if this is a video file (MOV, MP4, etc.)
         audio_content, effective_name, tmp_video_path = await loop.run_in_executor(
@@ -219,6 +357,7 @@ async def analyze_file(file: UploadFile = File(...)):
             "confidence": result.confidence,
             "stability": result.bpm_stability,
             "audio_url": audio_url,
+            "metadata": metadata,
         }
 
     except Exception as e:

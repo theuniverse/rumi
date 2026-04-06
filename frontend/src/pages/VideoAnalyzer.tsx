@@ -20,12 +20,21 @@ import {
 } from "../lib/api";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 
+interface VideoMetadata {
+  created_at?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  device?: string | null;
+  duration?: number | null;
+}
+
 interface AnalysisResult {
   bpm: number;
   genre_hint: string;
   confidence: number;
   stability: number;
   audio_url?: string | null;
+  metadata?: VideoMetadata;
 }
 
 interface TutorialAudio {
@@ -179,11 +188,24 @@ export default function VideoAnalyzer() {
     setIsSaving(true);
     try {
       const session = await createSession({ venue_id: selectedPlaceId ?? null });
-      const recording = await startRecording({ session_id: session.id, source: "video" });
-      await stopRecording(recording.id, {
-        avg_bpm: uploadResult.bpm, min_bpm: uploadResult.bpm, max_bpm: uploadResult.bpm,
-        dominant_genre: uploadResult.genre_hint, audio_url: uploadResult.audio_url ?? null,
+
+      // Use metadata from video if available, otherwise use null
+      const metadata = uploadResult.metadata || {};
+      const recording = await startRecording({
+        session_id: session.id,
+        source: "video",
+        latitude: metadata.latitude ?? null,
+        longitude: metadata.longitude ?? null,
       });
+
+      await stopRecording(recording.id, {
+        avg_bpm: uploadResult.bpm,
+        min_bpm: uploadResult.bpm,
+        max_bpm: uploadResult.bpm,
+        dominant_genre: uploadResult.genre_hint,
+        audio_url: uploadResult.audio_url ?? null,
+      });
+
       if (selectedTags.size > 0) await addRecordingTags(recording.id, [...selectedTags]);
       setSaved(true);
       setShowSaveDialog(false);
@@ -272,6 +294,58 @@ export default function VideoAnalyzer() {
                 <span className="text-soft font-mono">{Math.round(uploadResult.stability * 100)}%</span>
               </div>
             </div>
+
+            {/* Video Metadata Section */}
+            {uploadResult.metadata && (
+              uploadResult.metadata.created_at ||
+              uploadResult.metadata.latitude ||
+              uploadResult.metadata.device
+            ) && (
+              <div className="pt-3 border-t border-rim">
+                <p className="text-ghost text-xs mb-2 flex items-center gap-1">
+                  <MapPin size={11} className="text-faint" />
+                  Video Metadata
+                </p>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  {uploadResult.metadata.created_at && (
+                    <div>
+                      <span className="text-ghost block mb-0.5">Recorded At</span>
+                      <span className="text-soft font-mono text-[11px]">
+                        {new Date(uploadResult.metadata.created_at).toLocaleString('zh-CN', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
+                  )}
+                  {uploadResult.metadata.latitude && uploadResult.metadata.longitude && (
+                    <div>
+                      <span className="text-ghost block mb-0.5">GPS Location</span>
+                      <span className="text-soft font-mono text-[11px]">
+                        {uploadResult.metadata.latitude.toFixed(5)}, {uploadResult.metadata.longitude.toFixed(5)}
+                      </span>
+                    </div>
+                  )}
+                  {uploadResult.metadata.device && (
+                    <div>
+                      <span className="text-ghost block mb-0.5">Device</span>
+                      <span className="text-soft text-[11px]">{uploadResult.metadata.device}</span>
+                    </div>
+                  )}
+                  {uploadResult.metadata.duration && (
+                    <div>
+                      <span className="text-ghost block mb-0.5">Duration</span>
+                      <span className="text-soft font-mono text-[11px]">
+                        {Math.floor(uploadResult.metadata.duration / 60)}:{String(Math.floor(uploadResult.metadata.duration % 60)).padStart(2, '0')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2 pt-2 border-t border-rim">
               {uploadResult.audio_url && (
                 <button
@@ -572,12 +646,16 @@ function TutorialBlock({ audio, onSaved }: { audio: TutorialAudio; onSaved: () =
     setIsSaving(true);
     try {
       const session = await createSession({ venue_id: selectedPlaceId ?? null });
+
+      // Use metadata from video if available
+      const metadata = result.metadata || {};
       const recording = await startRecording({
         session_id: session.id,
-        latitude: null,
-        longitude: null,
+        latitude: metadata.latitude ?? null,
+        longitude: metadata.longitude ?? null,
         source: "video",
       });
+
       await stopRecording(recording.id, {
         avg_bpm: result.bpm,
         min_bpm: result.bpm,
@@ -585,9 +663,11 @@ function TutorialBlock({ audio, onSaved }: { audio: TutorialAudio; onSaved: () =
         dominant_genre: result.genre_hint,
         audio_url: result.audio_url ?? null,
       });
+
       if (selectedTags.size > 0) {
         await addRecordingTags(recording.id, [...selectedTags]);
       }
+
       setSaved(true);
       setShowSaveDialog(false);
       onSaved();

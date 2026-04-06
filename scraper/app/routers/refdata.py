@@ -5,7 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -13,6 +13,7 @@ from app.models import (
     Discovery, DiscoveryStatus, EventEntityMatch,
     ExtractedEvent, RefArtist, RefLabel, RefVenue, TimetableSlot,
 )
+from app.services.matcher import match_event
 
 router = APIRouter(tags=["refdata"])
 
@@ -367,6 +368,222 @@ async def mark_event_pushed(event_id: int, db: AsyncSession = Depends(get_db)):
     await db.commit()
     return {"ok": True}
 
+# ── Event Recommendations (for Rumi Events page) ────────────────────────────
+
+@router.get("/refdata/events-by-artists")
+async def get_events_by_artists(
+    artist_ids: str = Query(..., description="Comma-separated artist IDs"),
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    limit: int = Query(default=50, le=200),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get events featuring specific artists.
+    Returns events where any of the provided artists are matched in the lineup.
+    """
+    # Parse artist IDs
+    try:
+        ids = [int(x.strip()) for x in artist_ids.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid artist_ids format")
+
+    if not ids:
+        return {"items": []}
+
+    # Query events with artist matches
+    q = (
+        select(ExtractedEvent)
+        .join(EventEntityMatch, EventEntityMatch.event_id == ExtractedEvent.id)
+        .where(EventEntityMatch.entity_type == "artist")
+        .where(EventEntityMatch.entity_id.in_(ids))
+        .where(ExtractedEvent.status != "tba")  # Exclude TBA events
+    )
+
+    # Date filtering
+    if date_from:
+        q = q.where(ExtractedEvent.event_date >= date_from)
+    else:
+        # Default: only future events
+        from datetime import date
+        q = q.where(ExtractedEvent.event_date >= date.today().isoformat())
+
+    if date_to:
+        q = q.where(ExtractedEvent.event_date <= date_to)
+
+    # Order by date and limit
+    q = q.order_by(ExtractedEvent.event_date.asc()).distinct().limit(limit)
+
+    result = await db.execute(q)
+    events = result.scalars().all()
+
+    # Build response with matched artists and timetable
+    items = []
+    for e in events:
+        # Get matched artists for this event
+        matches = (await db.execute(
+            select(EventEntityMatch)
+            .where(EventEntityMatch.event_id == e.id)
+            .where(EventEntityMatch.entity_type == "artist")
+            .where(EventEntityMatch.entity_id.in_(ids))
+        )).scalars().all()
+
+        # Get all entity matches (for venue info)
+        all_matches = (await db.execute(
+            select(EventEntityMatch).where(EventEntityMatch.event_id == e.id)
+        )).scalars().all()
+
+        # Get timetable slots
+        slots = (await db.execute(
+            select(TimetableSlot)
+            .where(TimetableSlot.event_id == e.id)
+            .order_by(TimetableSlot.stage_name, TimetableSlot.start_time)
+        )).scalars().all()
+
+        items.append({
+            "id": e.id,
+            "event_name": e.event_name,
+            "event_date": e.event_date,
+            "start_time": slots[0].start_time if slots else None,
+            "end_time": slots[-1].end_time if slots else None,
+            "venue": e.venue,
+            "ref_venue_id": e.ref_venue_id,
+            "city": e.city,
+            "info_level": e.info_level,
+            "status": e.status,
+            "confidence": e.confidence,
+            "matched_artists": [
+                {
+                    "entity_id": m.entity_id,
+                    "raw_name": m.raw_name,
+                    "confidence": m.confidence,
+                }
+                for m in matches
+            ],
+            "entity_matches": [
+                {
+                    "entity_type": m.entity_type,
+                    "entity_id": m.entity_id,
+                    "raw_name": m.raw_name,
+                    "confidence": m.confidence,
+                }
+                for m in all_matches
+            ],
+            "timetable_slots": [
+                {
+                    "stage_name": s.stage_name,
+                    "start_time": s.start_time,
+                    "end_time": s.end_time,
+                    "artists": json.loads(s.artists_json or "[]"),
+                    "is_b2b": s.is_b2b,
+                    "set_type": s.set_type,
+                }
+                for s in slots
+            ],
+            "created_at": e.created_at,
+        })
+
+    return {"items": items, "total": len(items)}
+
+
+@router.get("/refdata/events-by-venues")
+async def get_events_by_venues(
+    venue_ids: str = Query(..., description="Comma-separated venue IDs"),
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    limit: int = Query(default=50, le=200),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get events at specific venues.
+    Returns events where the venue is matched to one of the provided venue IDs.
+    """
+    # Parse venue IDs
+    try:
+        ids = [int(x.strip()) for x in venue_ids.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid venue_ids format")
+
+    if not ids:
+        return {"items": []}
+
+    # Query events at these venues
+    q = (
+        select(ExtractedEvent)
+        .where(ExtractedEvent.ref_venue_id.in_(ids))
+        .where(ExtractedEvent.status != "tba")  # Exclude TBA events
+    )
+
+    # Date filtering
+    if date_from:
+        q = q.where(ExtractedEvent.event_date >= date_from)
+    else:
+        # Default: only future events
+        from datetime import date
+        q = q.where(ExtractedEvent.event_date >= date.today().isoformat())
+
+    if date_to:
+        q = q.where(ExtractedEvent.event_date <= date_to)
+
+    # Order by date and limit
+    q = q.order_by(ExtractedEvent.event_date.asc()).limit(limit)
+
+    result = await db.execute(q)
+    events = result.scalars().all()
+
+    # Build response with entity matches and timetable
+    items = []
+    for e in events:
+        # Get all entity matches
+        matches = (await db.execute(
+            select(EventEntityMatch).where(EventEntityMatch.event_id == e.id)
+        )).scalars().all()
+
+        # Get timetable slots
+        slots = (await db.execute(
+            select(TimetableSlot)
+            .where(TimetableSlot.event_id == e.id)
+            .order_by(TimetableSlot.stage_name, TimetableSlot.start_time)
+        )).scalars().all()
+
+        items.append({
+            "id": e.id,
+            "event_name": e.event_name,
+            "event_date": e.event_date,
+            "start_time": slots[0].start_time if slots else None,
+            "end_time": slots[-1].end_time if slots else None,
+            "venue": e.venue,
+            "ref_venue_id": e.ref_venue_id,
+            "city": e.city,
+            "info_level": e.info_level,
+            "status": e.status,
+            "confidence": e.confidence,
+            "entity_matches": [
+                {
+                    "entity_type": m.entity_type,
+                    "entity_id": m.entity_id,
+                    "raw_name": m.raw_name,
+                    "confidence": m.confidence,
+                }
+                for m in matches
+            ],
+            "timetable_slots": [
+                {
+                    "stage_name": s.stage_name,
+                    "start_time": s.start_time,
+                    "end_time": s.end_time,
+                    "artists": json.loads(s.artists_json or "[]"),
+                    "is_b2b": s.is_b2b,
+                    "set_type": s.set_type,
+                }
+                for s in slots
+            ],
+            "created_at": e.created_at,
+        })
+
+    return {"items": items, "total": len(items)}
+
+
 
 # ── Version (change detection for Rumi polling) ─────────────────────────────
 
@@ -381,3 +598,101 @@ async def refdata_version(db: AsyncSession = Depends(get_db)):
         if row and (latest is None or row > latest):
             latest = row
     return {"version": latest.isoformat() if latest else None}
+
+
+
+# ── Rematch Events ──────────────────────────────────────────────────────────
+
+@router.post("/refdata/rematch-event/{event_id}")
+async def rematch_single_event(
+    event_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Re-match a single event's artists and venue against reference data.
+    Clears existing matches and re-runs the matcher.
+    """
+    # Get the event
+    event = await db.get(ExtractedEvent, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # Clear existing entity matches
+    await db.execute(
+        delete(EventEntityMatch).where(EventEntityMatch.event_id == event_id)
+    )
+    await db.commit()
+
+    # Re-run matcher
+    await match_event(db, event)
+    await db.commit()
+
+    # Get updated matches
+    matches = (await db.execute(
+        select(EventEntityMatch).where(EventEntityMatch.event_id == event_id)
+    )).scalars().all()
+
+    return {
+        "status": "success",
+        "event_id": event_id,
+        "matches_count": len(matches),
+        "matches": [
+            {
+                "entity_type": m.entity_type,
+                "entity_id": m.entity_id,
+                "raw_name": m.raw_name,
+                "confidence": m.confidence
+            }
+            for m in matches
+        ]
+    }
+
+
+@router.post("/refdata/rematch-all-events")
+async def rematch_all_events(
+    status_filter: Optional[str] = Query(None, description="Filter by event status (e.g., 'complete')"),
+    limit: int = Query(default=100, le=500, description="Max events to rematch"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Re-match multiple events. Useful after updating reference data.
+    """
+    # Query events
+    q = select(ExtractedEvent).order_by(ExtractedEvent.created_at.desc())
+
+    if status_filter:
+        q = q.where(ExtractedEvent.status == status_filter)
+
+    q = q.limit(limit)
+
+    result = await db.execute(q)
+    events = result.scalars().all()
+
+    matched_count = 0
+    errors = []
+
+    for event in events:
+        try:
+            # Clear existing matches
+            await db.execute(
+                delete(EventEntityMatch).where(EventEntityMatch.event_id == event.id)
+            )
+
+            # Re-match
+            await match_event(db, event)
+            matched_count += 1
+
+        except Exception as e:
+            errors.append({
+                "event_id": event.id,
+                "error": str(e)
+            })
+
+    await db.commit()
+
+    return {
+        "status": "success",
+        "total_events": len(events),
+        "matched_count": matched_count,
+        "errors": errors
+    }

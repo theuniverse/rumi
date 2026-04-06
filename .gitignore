@@ -1,7 +1,8 @@
 # Python
 backend/.venv/
-backend/**/__pycache__/
-backend/**/*.pyc
+scraper/.venv/
+**/__pycache__/
+**/*.pyc
 
 # Environment files (secrets)
 .env
