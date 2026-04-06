@@ -28,15 +28,12 @@ echo "New version: $NEW_VERSION"
 echo "$NEW_VERSION" > backend/version.txt
 echo "$NEW_VERSION" > frontend/public/version.txt
 
-# Update hook file
-sed -i.bak "s/const CURRENT_VERSION = \"[0-9]*\"/const CURRENT_VERSION = \"$NEW_VERSION\"/" frontend/src/hooks/useVersionCheck.ts
-rm -f frontend/src/hooks/useVersionCheck.ts.bak
-
 echo "✅ Version bumped to $NEW_VERSION"
 echo ""
 echo "Next steps:"
 echo "1. Review changes: git diff"
 echo "2. Commit: git add -A && git commit -m \"chore: bump version to $NEW_VERSION\""
-echo "3. Deploy the application"
+echo "3. Rebuild frontend (version will be injected at build time)"
+echo "4. Deploy the application"
 
 # Made with Bob

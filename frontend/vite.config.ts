@@ -1,9 +1,20 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
+import fs from "fs";
+import path from "path";
+
+// Read version from version.txt
+const versionPath = path.resolve(__dirname, "public/version.txt");
+const APP_VERSION = fs.existsSync(versionPath)
+  ? fs.readFileSync(versionPath, "utf-8").trim()
+  : "dev";
 
 export default defineConfig({
   base: "/rumi/",
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+  },
   plugins: [
     react(),
     VitePWA({
