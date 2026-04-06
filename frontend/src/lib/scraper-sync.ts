@@ -29,12 +29,12 @@ async function _doImport(): Promise<number> {
   if (!data.items || data.items.length === 0) return 0;
 
   // Dynamic import to avoid circular dependency
-  const { saveScraperEvent } = await import("./db");
+  const { addScraperEventToMyEvents } = await import("./db");
 
   let imported = 0;
   for (const event of data.items) {
     try {
-      await saveScraperEvent(event);
+      await addScraperEventToMyEvents(event);
       // Mark as pushed on scraper side
       await scraperApi.markEventPushed(event.id);
       imported++;
