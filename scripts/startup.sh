@@ -6,9 +6,9 @@
 #    ./scripts/startup.sh                        # 启动全部服务
 #    ./scripts/startup.sh backend                # 只启动 backend
 #    ./scripts/startup.sh backend frontend       # 启动多个指定服务
-#    ./scripts/startup.sh scraper wewe           # 启动 scraper + WeWeRSS
 #
-#  可用服务名: backend  frontend  scraper  wewe
+#  可用服务名: backend  frontend  scraper
+#  WeWeRSS 请使用: ./scripts/wewerss.sh startup
 # =============================================================================
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -29,7 +29,7 @@ dim()   { echo -e "${DIM}   $*${NC}"; }
 header(){ echo ""; echo "  $*"; }
 
 # ── 服务选择 ──────────────────────────────────────────────────────────────────
-ALL_SERVICES=(backend frontend scraper wewe)
+ALL_SERVICES=(backend frontend scraper)
 if [ $# -eq 0 ]; then
   RUN_SERVICES=("${ALL_SERVICES[@]}")
 else
@@ -188,103 +188,6 @@ if should_run scraper; then
 fi
 
 # =============================================================================
-#  SERVICE: wewe  (WeWeRSS + MySQL, via Docker)
-# =============================================================================
-if should_run wewe; then
-  header "[wewe] WeWeRSS + MySQL (Docker)"
-
-  (
-    # Docker 可用性检查
-    if ! docker info > /dev/null 2>&1; then
-      err "Docker daemon not running — cannot start WeWeRSS"
-      exit 1
-    fi
-
-    WEWE_NETWORK="wewe-net"
-    WEWE_DB_PASS="${WEWE_DB_PASSWORD:-wewe_rss_pass}"
-    WEWE_AUTH="${WEWE_AUTH_CODE:-changeme_wewe}"
-
-    # ── 网络 ────────────────────────────────────────────────────────────────
-    if ! docker network inspect "$WEWE_NETWORK" > /dev/null 2>&1; then
-      dim "Creating Docker network $WEWE_NETWORK…"
-      docker network create "$WEWE_NETWORK"
-    else
-      dim "Network $WEWE_NETWORK already exists"
-    fi
-
-    # ── MySQL ────────────────────────────────────────────────────────────────
-    MYSQL_RUNNING=$(docker inspect -f '{{.State.Running}}' wewe-mysql 2>/dev/null || echo "false")
-    MYSQL_EXISTS=$(docker inspect wewe-mysql > /dev/null 2>&1 && echo "true" || echo "false")
-
-    if [ "$MYSQL_RUNNING" = "true" ]; then
-      warn "wewe-mysql already running — skipping"
-    else
-      if [ "$MYSQL_EXISTS" = "true" ]; then
-        dim "Restarting existing wewe-mysql container…"
-        docker start wewe-mysql > /dev/null
-      else
-        dim "Creating wewe-mysql container…"
-        docker run -d --name wewe-mysql \
-          --network "$WEWE_NETWORK" \
-          -e MYSQL_ROOT_PASSWORD="$WEWE_DB_PASS" \
-          -e MYSQL_DATABASE=wewe_rss \
-          -e MYSQL_ROOT_HOST='%' \
-          --restart unless-stopped \
-          mysql:8.0 > /dev/null
-      fi
-
-      dim "Waiting for MySQL to be ready…"
-      for i in $(seq 1 20); do
-        if docker exec wewe-mysql mysqladmin ping -uroot -p"$WEWE_DB_PASS" --silent 2>/dev/null; then
-          ok "MySQL ready"
-          break
-        fi
-        [ "$i" -eq 20 ] && { err "MySQL did not become ready in time"; exit 1; }
-        sleep 3
-      done
-    fi
-
-    # ── WeWeRSS ──────────────────────────────────────────────────────────────
-    WEWE_RUNNING=$(docker inspect -f '{{.State.Running}}' wewe-rss 2>/dev/null || echo "false")
-    WEWE_EXISTS=$(docker inspect wewe-rss > /dev/null 2>&1 && echo "true" || echo "false")
-
-    if [ "$WEWE_RUNNING" = "true" ]; then
-      warn "wewe-rss already running — skipping"
-    else
-      if [ "$WEWE_EXISTS" = "true" ]; then
-        dim "Restarting existing wewe-rss container…"
-        docker start wewe-rss > /dev/null
-      else
-        dim "Creating wewe-rss container…"
-        docker run -d --name wewe-rss \
-          --network "$WEWE_NETWORK" \
-          -p 4000:4000 \
-          -e DATABASE_URL="mysql://root:${WEWE_DB_PASS}@wewe-mysql:3306/wewe_rss" \
-          -e AUTH_CODE="$WEWE_AUTH" \
-          -e SERVER_ORIGIN_URL="http://localhost:4000" \
-          -e MAX_ITEMS_PER_FEED=20 \
-          -e CRON_EXPRESSION="35 5,17 * * *" \
-          -e ENABLE_FEED_AUTH=false \
-          --restart unless-stopped \
-          cooderl/wewe-rss:latest > /dev/null
-      fi
-
-      dim "Waiting for WeWeRSS to be ready…"
-      for i in $(seq 1 15); do
-        if curl -sf http://localhost:4000 > /dev/null 2>&1; then
-          ok "WeWeRSS ready at http://localhost:4000"
-          break
-        fi
-        [ "$i" -eq 15 ] && { warn "WeWeRSS may still be starting — check: docker logs wewe-rss"; }
-        sleep 2
-      done
-    fi
-
-    ok "WeWeRSS: http://localhost:4000  (登录密码: $WEWE_AUTH)"
-  ) && STARTED+=(wewe) || { err "wewe failed — continuing"; FAILED+=(wewe); }
-fi
-
-# =============================================================================
 #  Summary
 # =============================================================================
 echo ""
@@ -300,7 +203,6 @@ echo ""
 should_run backend  && echo "    Backend    →  http://localhost:8000   (logs: /tmp/rumi_backend.log)"
 should_run frontend && echo "    Frontend   →  http://localhost:5173   (logs: /tmp/rumi_frontend.log)"
 should_run scraper  && echo "    Scraper    →  http://localhost:9000   (logs: /tmp/rumi_scraper.log)"
-should_run wewe     && echo "    WeWeRSS    →  http://localhost:4000   (docker logs wewe-rss)"
 
 if [ ${#FAILED[@]} -gt 0 ]; then
   echo ""

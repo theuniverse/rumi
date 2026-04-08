@@ -5,9 +5,10 @@
 #  用法:
 #    ./scripts/shutdown.sh                        # 停止全部服务
 #    ./scripts/shutdown.sh backend                # 只停 backend
-#    ./scripts/shutdown.sh scraper wewe           # 停 scraper + WeWeRSS
+#    ./scripts/shutdown.sh scraper                # 只停 scraper
 #
-#  可用服务名: backend  frontend  scraper  wewe
+#  可用服务名: backend  frontend  scraper
+#  WeWeRSS 请使用: ./scripts/wewerss.sh shutdown
 # =============================================================================
 
 GREEN='\033[0;32m'
@@ -22,7 +23,7 @@ err()  { echo -e "${RED}✗${NC}  $*"; }
 dim()  { echo -e "${DIM}   $*${NC}"; }
 
 # ── 服务选择 ──────────────────────────────────────────────────────────────────
-ALL_SERVICES=(frontend backend scraper wewe)
+ALL_SERVICES=(frontend backend scraper)
 if [ $# -eq 0 ]; then
   RUN_SERVICES=("${ALL_SERVICES[@]}")
 else
@@ -126,23 +127,6 @@ if should_run scraper; then
   echo ""
   echo "  [scraper]"
   stop_pid_file "Scraper" "/tmp/rumi_scraper.pid" "9000"
-fi
-
-# =============================================================================
-#  SERVICE: wewe  (WeWeRSS + MySQL)
-#  注意：停 wewe 只停容器，不删除（数据保留）。
-#  彻底删除数据请手动运行: docker rm wewe-rss wewe-mysql
-# =============================================================================
-if should_run wewe; then
-  echo ""
-  echo "  [wewe] WeWeRSS + MySQL"
-
-  if ! docker info > /dev/null 2>&1; then
-    warn "Docker daemon not running — skipping WeWeRSS"
-  else
-    stop_container "wewe-rss"
-    stop_container "wewe-mysql"
-  fi
 fi
 
 # =============================================================================
