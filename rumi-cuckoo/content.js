@@ -7,6 +7,8 @@
  */
 
 const CONTENT_SELECTOR = "#js_content";
+const TITLE_SELECTORS = ["#activity-name", ".rich_media_title"];
+const AUTHOR_SELECTORS = ["#js_author_name", ".rich_media_meta_nickname"];
 const MIN_CONTENT_LENGTH = 100;
 const READY_TIMEOUT_MS = 15000;
 
@@ -37,6 +39,14 @@ function extractText() {
   const el = document.querySelector(CONTENT_SELECTOR);
   if (!el) return null;
   return el.innerText.trim();
+}
+
+function extractFirst(selectors) {
+  for (const sel of selectors) {
+    const el = document.querySelector(sel);
+    if (el) return el.innerText.trim();
+  }
+  return "";
 }
 
 function checkReady() {
@@ -80,6 +90,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
-  sendResponse({ type: "EXTRACT_RESULT", text });
+  sendResponse({ type: "EXTRACT_RESULT", text, title: extractFirst(TITLE_SELECTORS), author: extractFirst(AUTHOR_SELECTORS) });
   return true;
 });

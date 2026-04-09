@@ -283,9 +283,9 @@ async def skip_page(page_id: int, db: AsyncSession = Depends(get_db)):
     page = (await db.execute(select(ScrapedPage).where(ScrapedPage.id == page_id))).scalar_one_or_none()
     if not page:
         raise HTTPException(status_code=404, detail="Page not found")
-    page.status = PageStatus.done
+    page.status = PageStatus.skipped
     await db.commit()
-    return {"ok": True, "page_id": page_id, "status": "done"}
+    return {"ok": True, "page_id": page_id, "status": "skipped"}
 
 
 @router.get("/audit/pages/{page_id}/reruns")

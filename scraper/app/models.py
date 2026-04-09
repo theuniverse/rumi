@@ -21,6 +21,7 @@ class PageStatus(str, enum.Enum):
     pending_extract = "pending_extract"
     extracting = "extracting"
     done = "done"
+    skipped = "skipped"               # manually dismissed; will not be re-queued
     error = "error"
 
 

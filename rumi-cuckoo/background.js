@@ -157,7 +157,12 @@ async function onTabReady(tabId) {
   }
 
   if (response?.type === "EXTRACT_RESULT") {
-    await submitContent(job, response.text);
+    const parts = [];
+    if (response.title?.trim())  parts.push(`标题：${response.title.trim()}`);
+    if (response.author?.trim()) parts.push(`作者：${response.author.trim()}`);
+    if (parts.length > 0) parts.push("");
+    parts.push(response.text);
+    await submitContent(job, parts.join("\n"));
   }
 }
 

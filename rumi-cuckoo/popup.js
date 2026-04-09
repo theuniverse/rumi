@@ -122,7 +122,8 @@ function metaContent(status, job, fetched) {
 function actionButtons(status, pageId, url, source, fetched, job) {
   if (status === "idle") {
     return `<button class="btn-sm primary" data-action="extract" data-page-id="${pageId}" data-url="${esc(url)}" data-source="${esc(source)}" data-fetched="${esc(fetched)}">提取</button>
-            <a class="btn-sm" href="${esc(url)}" target="_blank" rel="noopener">打开</a>`;
+            <a class="btn-sm" href="${esc(url)}" target="_blank" rel="noopener">打开</a>
+            <button class="btn-sm danger" data-action="dismiss" data-page-id="${pageId}">忽略</button>`;
   }
   if (status === "error") {
     return `<button class="btn-sm primary" data-action="retry" data-page-id="${pageId}" data-url="${esc(url)}" data-source="${esc(source)}" data-fetched="${esc(fetched)}" data-tab-id="${job?.tabId ?? ""}">重试</button>
@@ -260,6 +261,7 @@ $queue.addEventListener("click", async (e) => {
   if (action === "dismiss") {
     await chrome.runtime.sendMessage({ type: "DISMISS_JOB", pageId });
     activeJobs = activeJobs.filter((j) => j.pageId !== pageId);
+    allPages   = allPages.filter((p) => p.id !== pageId);
     render();
   }
 });
